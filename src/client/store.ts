@@ -111,21 +111,25 @@ export const useKb = create<KbStore>()((set, get) => {
       try {
         const result = await apiApplyOp(id, opArg)
         confirmed[id] = result
-        const index = get().index
-        set({ byId: { ...get().byId, [id]: result }, index: index ? replaceTask(index, result) : index })
       } catch (err) {
         thrown = err
       }
       inFlight[id] = (inFlight[id] ?? 1) - 1
-      if (inFlight[id] <= 0) delete inFlight[id]
-      if (thrown) {
-        if (!(inFlight[id] > 0)) {
-          const base = confirmed[id]
-          if (base) {
-            const index = get().index
-            set({ byId: { ...get().byId, [id]: base }, index: index ? replaceTask(index, base) : index })
-          }
+      const isLast = inFlight[id] <= 0
+      if (isLast) delete inFlight[id]
+      // Only write the (possibly stale, since other ops may have superseded
+      // it) server result into byId once every op for this task has
+      // settled — otherwise an earlier op's response would stomp the
+      // optimistic state of a still-in-flight later op (visible as a
+      // snap-back flicker on e.g. a cross-column drag's two sequential ops).
+      if (isLast) {
+        const base = confirmed[id]
+        if (base) {
+          const index = get().index
+          set({ byId: { ...get().byId, [id]: base }, index: index ? replaceTask(index, base) : index })
         }
+      }
+      if (thrown) {
         const code = thrown instanceof ApiError ? thrown.code : undefined
         if (code !== 'conflict') pushToast(thrown instanceof Error ? thrown.message : String(thrown))
         throw thrown

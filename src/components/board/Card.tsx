@@ -2,7 +2,6 @@
 
 import { memo } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import type { TaskView } from '@/core'
 import { dueState, useKb } from '@/client/store'
 
 const DUE_STYLE: Record<'overdue' | 'soon', string> = {
@@ -14,13 +13,19 @@ function transformStyle(transform: { x: number; y: number } | null): string | un
   return transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined
 }
 
-function CardImpl({ task, dragOverlay = false }: { task: TaskView; dragOverlay?: boolean }) {
+function CardImpl({ taskId, dragOverlay = false }: { taskId: string; dragOverlay?: boolean }) {
+  // Subscribing to byId[taskId] here (rather than taking the task as a prop)
+  // is what keeps a field edit elsewhere from re-rendering this card's
+  // column: only the one card whose own task object changed re-renders.
+  const task = useKb((s) => s.byId[taskId])
   const openPanel = useKb((s) => s.openPanel)
-  const parentTitle = useKb((s) => (task.parent ? s.byId[task.parent]?.title : undefined))
+  const parentTitle = useKb((s) => (task?.parent ? s.byId[task.parent]?.title : undefined))
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: task.id,
+    id: taskId,
     disabled: dragOverlay,
   })
+
+  if (!task) return null
 
   const due = dueState(task.due)
   const style = dragOverlay

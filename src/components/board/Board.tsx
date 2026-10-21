@@ -1,44 +1,25 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { DndContext, DragOverlay, PointerSensor, closestCorners, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
-import { isDone } from '@/core/columns'
 import { rankBetween } from '@/core/rank'
-import type { TaskView } from '@/core'
-import { applyFilters, useKb } from '@/client/store'
+import { useKb } from '@/client/store'
 import { Column } from './Column'
 import { Card } from './Card'
-
-const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000
-
-function recentlyCompleted(completed?: string): boolean {
-  if (!completed) return false
-  return Date.now() - new Date(completed).getTime() <= FOURTEEN_DAYS_MS
-}
+import { visibleColumnTasks } from './visibleTasks'
 
 export function Board() {
-  const index = useKb((s) => s.index)
-  const filters = useKb((s) => s.filters)
+  // Only config/columns is subscribed here — it's a stable reference across
+  // task ops (only a fresh snapshot replaces it), so Board itself never
+  // re-renders from a task update. Each Column tracks its own visible task
+  // ids; handleDragEnd reads fresh data via getState() instead of
+  // subscribing, since it only needs it at drop time.
+  const columns = useKb((s) => s.index?.config.columns)
   const op = useKb((s) => s.op)
   const [activeId, setActiveId] = useState<string | null>(null)
-  const activeTask = useKb((s) => (activeId ? s.byId[activeId] : undefined))
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
-
-  const columnTasks = useMemo(() => {
-    const map: Record<string, TaskView[]> = {}
-    if (!index) return map
-    const visible = applyFilters(index.tasks, { ...filters, showDone: true }, index.config)
-    for (const col of index.config.columns) {
-      let tasks = visible.filter((t) => t.status === col.key)
-      if (isDone(index.config, col.key) && !filters.showDone) {
-        tasks = tasks.filter((t) => recentlyCompleted(t.completed))
-      }
-      map[col.key] = tasks
-    }
-    return map
-  }, [index, filters])
 
   function handleDragStart(event: DragStartEvent): void {
     setActiveId(String(event.active.id))
@@ -52,27 +33,54 @@ export function Board() {
     const overId = String(over.id)
     if (overId === id) return
 
-    const byId = useKb.getState().byId
-    const task = byId[id]
+    const state = useKb.getState()
+    const index = state.index
+    if (!index) return
+    const task = state.byId[id]
     if (!task) return
-    const destKey = overId.startsWith('col:') ? overId.slice(4) : byId[overId]?.status
+    const destKey = overId.startsWith('col:') ? overId.slice(4) : state.byId[overId]?.status
     if (!destKey) return
 
-    const siblings = (columnTasks[destKey] ?? []).filter((t) => t.id !== id)
+    const sourceKey = task.status
+    const destList = visibleColumnTasks(index, state.filters, destKey)
+    const siblings = destList.filter((t) => t.id !== id)
+
+    // Default: dropped on the column's empty space (over is the `col:`
+    // container droppable, or the hovered task somehow isn't in the list
+    // anymore) — append at the end.
     let insertAt = siblings.length
     if (!overId.startsWith('col:')) {
-      const idx = siblings.findIndex((t) => t.id === overId)
-      if (idx !== -1) insertAt = idx
+      const overIdx = siblings.findIndex((t) => t.id === overId)
+      if (overIdx !== -1) {
+        if (sourceKey === destKey) {
+          // Same column: arrayMove semantics — moving down lands after the
+          // drop target, moving up lands before it.
+          const activeOriginalIdx = destList.findIndex((t) => t.id === id)
+          const overOriginalIdx = destList.findIndex((t) => t.id === overId)
+          insertAt = activeOriginalIdx < overOriginalIdx ? overIdx + 1 : overIdx
+        } else {
+          // Cross column: no "original position" in this column to compare,
+          // so use whether the dragged card's center is below the drop
+          // target's center.
+          const activeRect = active.rect.current.translated
+          const overRect = over.rect
+          const movingBelow = activeRect
+            ? activeRect.top + activeRect.height / 2 > overRect.top + overRect.height / 2
+            : false
+          insertAt = movingBelow ? overIdx + 1 : overIdx
+        }
+      }
     }
+
     const rank = rankBetween(siblings[insertAt - 1]?.rank, siblings[insertAt]?.rank)
 
-    if (task.status !== destKey) {
+    if (sourceKey !== destKey) {
       void op(id, { type: 'setStatus', status: destKey }, (t) => ({ ...t, status: destKey }))
     }
     void op(id, { type: 'setRank', rank }, (t) => ({ ...t, rank }))
   }
 
-  if (!index) {
+  if (!columns) {
     return <div className="p-8 text-sm text-gray-500">Loading…</div>
   }
 
@@ -84,11 +92,11 @@ export function Board() {
       onDragEnd={handleDragEnd}
     >
       <div className="flex h-full gap-4 overflow-x-auto p-4">
-        {index.config.columns.map((col) => (
-          <Column key={col.key} column={col} tasks={columnTasks[col.key] ?? []} />
+        {columns.map((col) => (
+          <Column key={col.key} column={col} />
         ))}
       </div>
-      <DragOverlay>{activeTask ? <Card task={activeTask} dragOverlay /> : null}</DragOverlay>
+      <DragOverlay>{activeId ? <Card taskId={activeId} dragOverlay /> : null}</DragOverlay>
     </DndContext>
   )
 }
