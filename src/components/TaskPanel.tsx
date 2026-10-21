@@ -1,6 +1,7 @@
 'use client'
 
 import { useKb } from '@/client/store'
+import { TaskDetail } from '@/components/detail/TaskDetail'
 
 export function TaskPanel() {
   const panelId = useKb((s) => s.panelId)
@@ -20,8 +21,8 @@ export function TaskPanel() {
           Esc
         </button>
       </div>
-      <div data-task-id={panelId} className="flex-1 overflow-y-auto p-4 text-sm text-gray-500">
-        Task detail coming soon.
+      <div data-task-id={panelId} className="flex-1 overflow-y-auto">
+        <TaskDetail id={panelId} />
       </div>
     </div>
   )
