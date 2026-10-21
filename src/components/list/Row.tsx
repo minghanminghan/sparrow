@@ -12,8 +12,11 @@ type RowProps = {
   selected: boolean
   hasChildren: boolean
   collapsed: boolean
-  onToggleCollapse: () => void
-  onSelectClick: (e: MouseEvent) => void
+  // Stable (useCallback'd) handlers from the list, taking the row's id as an
+  // argument rather than being wrapped per-row — that's what lets Row's memo
+  // hold when a sibling row's task data changes.
+  onToggleCollapse: (id: string) => void
+  onSelectClick: (id: string, e: MouseEvent) => void
 }
 
 function AssigneeCell({ taskId, assignee }: { taskId: string; assignee?: string }) {
@@ -68,7 +71,7 @@ function RowImpl({ id, depth, dimmed, selected, hasChildren, collapsed, onToggle
     <div
       ref={setNodeRef}
       style={style}
-      onClick={onSelectClick}
+      onClick={(e) => onSelectClick(id, e)}
       className={`flex items-center gap-2 border-b border-gray-100 px-2 py-1 text-sm ${
         selected ? 'bg-blue-50' : dimmed ? 'text-gray-400' : ''
       }`}
@@ -87,7 +90,7 @@ function RowImpl({ id, depth, dimmed, selected, hasChildren, collapsed, onToggle
         <button
           onClick={(e) => {
             e.stopPropagation()
-            onToggleCollapse()
+            onToggleCollapse(id)
           }}
           className="w-4 shrink-0 text-gray-400"
         >

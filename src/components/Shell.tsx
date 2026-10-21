@@ -15,7 +15,7 @@ import { TaskPanel } from './TaskPanel'
 // re-renders forever.
 const NO_INVALID: InvalidFile[] = []
 
-function isTypingTarget(target: EventTarget | null): boolean {
+export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   const tag = target.tagName
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable

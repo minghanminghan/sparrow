@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, MouseEvent } from 'react'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
@@ -10,22 +10,20 @@ import type { Config, TaskView } from '@/core'
 import { rankBetween } from '@/core/rank'
 import { applyFilters, useKb } from '@/client/store'
 import type { Filters } from '@/client/store'
+import { isTypingTarget } from '@/components/Shell'
 import { Row } from './Row'
 
-type Tree = {
-  order: string[]
+type Groups = {
+  // A task whose parent is missing, or wasn't pulled into `included`, is a
+  // root (key `undefined`).
   childrenOf: Map<string | undefined, TaskView[]>
   included: Map<string, boolean>
 }
 
-const EMPTY_TASKS: TaskView[] = []
-const EMPTY_TREE: Tree = { order: [], childrenOf: new Map(), included: new Map() }
-
 // Matches = tasks that pass the active filters. A match keeps its ancestor
 // chain so it stays in context, even when an ancestor itself doesn't match
-// (it's rendered dimmed). Roots are tasks whose parent is missing or wasn't
-// pulled into this set.
-function buildTree(tasks: TaskView[], filters: Filters, config: Config, collapsed: Set<string>): Tree {
+// (`included` is true but not a match) — it's rendered dimmed.
+function computeGroups(tasks: TaskView[], filters: Filters, config: Config): Groups {
   const matches = applyFilters(tasks, filters, config)
   const byId = new Map(tasks.map((t) => [t.id, t]))
   const included = new Map<string, boolean>()
@@ -48,55 +46,93 @@ function buildTree(tasks: TaskView[], filters: Filters, config: Config, collapse
     childrenOf.get(key)!.push(t)
   }
 
-  const order: string[] = []
-  const walk = (parentId: string | undefined): void => {
-    for (const t of childrenOf.get(parentId) ?? []) {
-      order.push(t.id)
-      if (!collapsed.has(t.id)) walk(t.id)
-    }
-  }
-  walk(undefined)
-
-  return { order, childrenOf, included }
+  return { childrenOf, included }
 }
 
 function keyOf(task: TaskView, included: Map<string, boolean>): string | undefined {
   return task.parent && included.has(task.parent) ? task.parent : undefined
 }
 
+// Encoded as primitive strings (not objects/Maps) so a `useShallow` selector
+// can bail the component out of re-rendering when an edit doesn't change
+// which rows are shown, their order, depth, or dimmed state — only id/parent/
+// rank/status/due/assignee/title changes (the inputs to filtering and
+// ordering) can change this array's contents.
+function encodeRows(groups: Groups): string[] {
+  const rows: string[] = []
+  const walk = (parentId: string | undefined, depth: number): void => {
+    for (const t of groups.childrenOf.get(parentId) ?? []) {
+      const dimmed = groups.included.get(t.id) === true
+      rows.push(`${t.id}|${depth}|${dimmed ? 1 : 0}|${parentId ?? ''}`)
+      walk(t.id, depth + 1)
+    }
+  }
+  walk(undefined, 0)
+  return rows
+}
+
+type RowDescriptor = { id: string; depth: number; dimmed: boolean; parentKey: string | undefined }
+
+function decodeRows(rows: string[]): RowDescriptor[] {
+  return rows.map((line) => {
+    const [id, depthStr, dimmedStr, parentKey] = line.split('|')
+    return { id, depth: Number(depthStr), dimmed: dimmedStr === '1', parentKey: parentKey || undefined }
+  })
+}
+
+const EMPTY_ROWS: string[] = []
+
+type DisplayTree = {
+  childrenOf: Map<string | undefined, RowDescriptor[]>
+  hasChildrenOf: Set<string>
+}
+
+// Collapsing a node hides its whole subtree, not just its direct children —
+// `allRows` is in parent-before-child order, so a single pass tracking which
+// ids were actually kept visible cascades that correctly.
+function applyCollapse(allRows: RowDescriptor[], collapsed: Set<string>): { displayed: RowDescriptor[]; order: string[] } {
+  const visible = new Set<string>()
+  const displayed: RowDescriptor[] = []
+  for (const r of allRows) {
+    const parentVisible = r.parentKey === undefined || (visible.has(r.parentKey) && !collapsed.has(r.parentKey))
+    if (!parentVisible) continue
+    visible.add(r.id)
+    displayed.push(r)
+  }
+  return { displayed, order: displayed.map((r) => r.id) }
+}
+
 type GroupProps = {
-  parentId: string | undefined
-  depth: number
-  tree: Tree
+  parentKey: string | undefined
+  tree: DisplayTree
   collapsed: Set<string>
   selected: Set<string>
   onToggleCollapse: (id: string) => void
   onRowClick: (id: string, e: MouseEvent) => void
 }
 
-function GroupRows({ parentId, depth, tree, collapsed, selected, onToggleCollapse, onRowClick }: GroupProps) {
-  const siblings = tree.childrenOf.get(parentId) ?? []
+function GroupRows({ parentKey, tree, collapsed, selected, onToggleCollapse, onRowClick }: GroupProps) {
+  const siblings = tree.childrenOf.get(parentKey) ?? []
   if (siblings.length === 0) return null
-  const ids = siblings.map((t) => t.id)
+  const ids = siblings.map((r) => r.id)
 
   return (
     <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-      {siblings.map((t) => (
-        <div key={t.id}>
+      {siblings.map((r) => (
+        <div key={r.id}>
           <Row
-            id={t.id}
-            depth={depth}
-            dimmed={tree.included.get(t.id) === true}
-            selected={selected.has(t.id)}
-            hasChildren={(tree.childrenOf.get(t.id) ?? []).length > 0}
-            collapsed={collapsed.has(t.id)}
-            onToggleCollapse={() => onToggleCollapse(t.id)}
-            onSelectClick={(e) => onRowClick(t.id, e)}
+            id={r.id}
+            depth={r.depth}
+            dimmed={r.dimmed}
+            selected={selected.has(r.id)}
+            hasChildren={tree.hasChildrenOf.has(r.id)}
+            collapsed={collapsed.has(r.id)}
+            onToggleCollapse={onToggleCollapse}
+            onSelectClick={onRowClick}
           />
-          {!collapsed.has(t.id) && (
+          {!collapsed.has(r.id) && (
             <GroupRows
-              parentId={t.id}
-              depth={depth + 1}
+              parentKey={r.id}
               tree={tree}
               collapsed={collapsed}
               selected={selected}
@@ -111,23 +147,60 @@ function GroupRows({ parentId, depth, tree, collapsed, selected, onToggleCollaps
 }
 
 export function TaskList() {
-  const tasks = useKb(useShallow((s) => s.index?.tasks ?? EMPTY_TASKS))
+  // Filtering (title/status/assignee/due/etc.) happens inside the selector,
+  // which returns only primitive strings encoding order/depth/dimmed/parent.
+  // useShallow then bails the component out of re-rendering when an edit
+  // doesn't change the visible structure — see computeGroups/encodeRows.
+  const rawRows = useKb(
+    useShallow((s) => (s.index ? encodeRows(computeGroups(s.index.tasks, s.filters, s.index.config)) : EMPTY_ROWS)),
+  )
   const config = useKb((s) => s.index?.config)
-  const filters = useKb((s) => s.filters)
   const op = useKb((s) => s.op)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [lastClicked, setLastClicked] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState('')
+  const lastClickedRef = useRef<string | null>(null)
 
-  const tree = useMemo(
-    () => (config ? buildTree(tasks, filters, config, collapsed) : EMPTY_TREE),
-    [tasks, filters, config, collapsed],
-  )
+  const allRows = useMemo(() => decodeRows(rawRows), [rawRows])
+  const { displayed, order } = useMemo(() => applyCollapse(allRows, collapsed), [allRows, collapsed])
+  const orderRef = useRef<string[]>(order)
+  orderRef.current = order
+
+  const tree = useMemo((): DisplayTree => {
+    // hasChildrenOf comes from the *full* tree (not `displayed`) so a
+    // collapsed group's toggle stays visible — otherwise, once hidden, its
+    // children could never be found to re-expand it.
+    const childrenOf = new Map<string | undefined, RowDescriptor[]>()
+    for (const r of displayed) {
+      if (!childrenOf.has(r.parentKey)) childrenOf.set(r.parentKey, [])
+      childrenOf.get(r.parentKey)!.push(r)
+    }
+    const hasChildrenOf = new Set<string>()
+    for (const r of allRows) {
+      if (r.parentKey) hasChildrenOf.add(r.parentKey)
+    }
+    return { childrenOf, hasChildrenOf }
+  }, [displayed, allRows])
+
+  // Prune selection to ids still visible after a collapse/filter/search
+  // change, so bulk actions never reach hidden rows.
+  useEffect(() => {
+    setSelected((prev) => {
+      const visible = new Set(order)
+      let changed = false
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (visible.has(id)) next.add(id)
+        else changed = true
+      }
+      return changed ? next : prev
+    })
+  }, [order])
 
   useEffect(() => {
     function onKeyDown(e: globalThis.KeyboardEvent): void {
-      if (e.key === 'Escape') setSelected((prev) => (prev.size > 0 ? new Set() : prev))
+      if (e.key !== 'Escape' || isTypingTarget(e.target)) return
+      setSelected((prev) => (prev.size > 0 ? new Set() : prev))
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -135,22 +208,23 @@ export function TaskList() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
 
-  function toggleCollapse(id: string): void {
+  const onToggleCollapse = useCallback((id: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-  }
+  }, [])
 
-  function handleRowClick(id: string, e: MouseEvent): void {
-    if (e.shiftKey && lastClicked) {
-      const a = tree.order.indexOf(lastClicked)
-      const b = tree.order.indexOf(id)
+  const onRowClick = useCallback((id: string, e: MouseEvent) => {
+    if (e.shiftKey && lastClickedRef.current) {
+      const ord = orderRef.current
+      const a = ord.indexOf(lastClickedRef.current)
+      const b = ord.indexOf(id)
       if (a !== -1 && b !== -1) {
         const [lo, hi] = a < b ? [a, b] : [b, a]
-        setSelected(new Set(tree.order.slice(lo, hi + 1)))
+        setSelected(new Set(ord.slice(lo, hi + 1)))
         return
       }
     }
@@ -161,12 +235,12 @@ export function TaskList() {
         else next.add(id)
         return next
       })
-      setLastClicked(id)
+      lastClickedRef.current = id
       return
     }
     setSelected(new Set([id]))
-    setLastClicked(id)
-  }
+    lastClickedRef.current = id
+  }, [])
 
   function handleDragEnd(event: DragEndEvent): void {
     const { active, over } = event
@@ -182,12 +256,12 @@ export function TaskList() {
     const overTask = state.byId[overId]
     if (!task || !overTask) return
 
-    const fresh = buildTree(idx.tasks, state.filters, idx.config, collapsed)
-    const activeKey = keyOf(task, fresh.included)
-    const overKey = keyOf(overTask, fresh.included)
+    const groups = computeGroups(idx.tasks, state.filters, idx.config)
+    const activeKey = keyOf(task, groups.included)
+    const overKey = keyOf(overTask, groups.included)
     if (activeKey !== overKey) return
 
-    const siblings = fresh.childrenOf.get(activeKey) ?? []
+    const siblings = groups.childrenOf.get(activeKey) ?? []
     const withoutActive = siblings.filter((t) => t.id !== id)
     const overIdx = withoutActive.findIndex((t) => t.id === overId)
     let insertAt = withoutActive.length
@@ -264,13 +338,12 @@ export function TaskList() {
       <div className="flex-1 overflow-y-auto">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <GroupRows
-            parentId={undefined}
-            depth={0}
+            parentKey={undefined}
             tree={tree}
             collapsed={collapsed}
             selected={selected}
-            onToggleCollapse={toggleCollapse}
-            onRowClick={handleRowClick}
+            onToggleCollapse={onToggleCollapse}
+            onRowClick={onRowClick}
           />
         </DndContext>
       </div>
