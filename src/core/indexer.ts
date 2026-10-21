@@ -45,6 +45,11 @@ export function buildIndex(ws: string): Index {
     if (!isTaskFile(name)) continue
     try {
       const task = parseTask(fs.readFileSync(path.join(dir, name), 'utf8'))
+      const stem = name.slice(0, -'.md'.length)
+      if (task.id !== stem) {
+        invalid.push({ file: name, error: `id "${task.id}" does not match file name ${name}` })
+        continue
+      }
       tasksById.set(task.id, task)
     } catch (err) {
       invalid.push({ file: name, error: (err as Error).message })
