@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import NextLink from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -8,6 +8,7 @@ import type { Backlink, Link as TaskLink, LinkType, Ref, TaskView } from '@/core
 import { columnByRole, isDone } from '@/core/columns'
 import { ApiError } from '@/client/api'
 import { useKb } from '@/client/store'
+import { AssigneeField } from '@/components/AssigneeField'
 import { Markdown } from '@/components/Markdown'
 
 const nowIso = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -254,32 +255,6 @@ function BodyEditor({ task }: { task: TaskView }) {
         <div className="text-sm text-gray-400">No description.</div>
       )}
     </div>
-  )
-}
-
-function AssigneeInput({ task }: { task: TaskView }) {
-  const op = useKb((s) => s.op)
-  const [value, setValue] = useState(task.assignee ?? '')
-
-  useEffect(() => setValue(task.assignee ?? ''), [task.assignee])
-
-  function commit(): void {
-    const next = value.trim() || null
-    if (next === (task.assignee ?? null)) return
-    void op(task.id, { type: 'setAssignee', assignee: next }, (t) => ({ ...t, assignee: next ?? undefined }))
-  }
-
-  return (
-    <input
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') e.currentTarget.blur()
-      }}
-      placeholder="Unassigned"
-      className="rounded border border-gray-300 px-2 py-1 text-sm"
-    />
   )
 }
 
@@ -646,7 +621,11 @@ export function TaskDetail({ id, fullPage = false }: { id: string; fullPage?: bo
             }}
             className="rounded border border-gray-300 px-2 py-1 text-sm"
           />
-          <AssigneeInput task={task} />
+          <AssigneeField
+            id={task.id}
+            assignee={task.assignee}
+            className="rounded border border-gray-300 px-2 py-1 text-sm"
+          />
           <button onClick={() => void handleDelete()} className="ml-auto text-sm text-red-600 hover:underline">
             Delete
           </button>

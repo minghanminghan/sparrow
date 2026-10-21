@@ -1,9 +1,10 @@
 'use client'
 
-import { memo, useEffect, useState } from 'react'
+import { memo } from 'react'
 import type { MouseEvent } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { useKb } from '@/client/store'
+import { AssigneeField } from '@/components/AssigneeField'
 
 type RowProps = {
   id: string
@@ -17,37 +18,6 @@ type RowProps = {
   // hold when a sibling row's task data changes.
   onToggleCollapse: (id: string) => void
   onSelectClick: (id: string, e: MouseEvent) => void
-}
-
-function AssigneeCell({ taskId, assignee }: { taskId: string; assignee?: string }) {
-  const op = useKb((s) => s.op)
-  const [value, setValue] = useState(assignee ?? '')
-
-  useEffect(() => setValue(assignee ?? ''), [assignee])
-
-  function commit(): void {
-    const next = value.trim() || null
-    if (next === (assignee ?? null)) return
-    void op(taskId, { type: 'setAssignee', assignee: next }, (t) => ({ ...t, assignee: next ?? undefined }))
-  }
-
-  return (
-    <input
-      value={value}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault()
-          commit()
-          e.currentTarget.blur()
-        }
-      }}
-      placeholder="Unassigned"
-      className="w-24 shrink-0 rounded border border-gray-200 px-1 py-0.5 text-xs"
-    />
-  )
 }
 
 function RowImpl({ id, depth, dimmed, selected, hasChildren, collapsed, onToggleCollapse, onSelectClick }: RowProps) {
@@ -133,7 +103,12 @@ function RowImpl({ id, depth, dimmed, selected, hasChildren, collapsed, onToggle
         }}
         className="shrink-0 rounded border border-gray-200 px-1 py-0.5 text-xs"
       />
-      <AssigneeCell taskId={task.id} assignee={task.assignee} />
+      <AssigneeField
+        id={task.id}
+        assignee={task.assignee}
+        onClick={(e) => e.stopPropagation()}
+        className="w-24 shrink-0 rounded border border-gray-200 px-1 py-0.5 text-xs"
+      />
       <span className="w-10 shrink-0 text-right text-xs text-gray-500">
         {task.progress.total > 0 ? `${task.progress.done}/${task.progress.total}` : ''}
       </span>
