@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { generateKeyBetween } from 'fractional-indexing'
@@ -178,7 +179,14 @@ export async function createTask(ws: string, input: CreateInput): Promise<Task> 
     }
     setStatus(config, task, status, at)
     task.rank = input.rank ?? generateKeyBetween(lastRank(ws, status), null)
-    fs.writeFileSync(taskPath(ws, task.id), serializeTask(task), { flag: 'wx' })
+    const target = taskPath(ws, task.id)
+    const tmp = path.join(ws, 'tasks', `.${task.id}.md.tmp-${randomBytes(6).toString('hex')}`)
+    fs.writeFileSync(tmp, serializeTask(task))
+    try {
+      fs.linkSync(tmp, target)
+    } finally {
+      fs.rmSync(tmp, { force: true })
+    }
     return task
   })
 }

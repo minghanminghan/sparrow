@@ -34,7 +34,10 @@ export function initWorkspace(dir: string, prefix = 'KB'): void {
   if (!fs.existsSync(agents)) fs.writeFileSync(agents, AGENTS_MD)
 }
 
+const ID_RE = /^[A-Za-z]+-\d+$/
+
 export function taskPath(ws: string, id: string): string {
+  if (!ID_RE.test(id)) throw new KbError('usage', `invalid task id "${id}"`)
   return path.join(ws, 'tasks', `${id}.md`)
 }
 
