@@ -46,6 +46,15 @@ function removeFromIndex(index: Index, id: string): Index {
 }
 
 export const useKb = create<KbStore>()((set, get) => {
+  // Bookkeeping for op() sequencing — not reactive state, so plain objects.
+  // `confirmed[id]` is the last server-confirmed TaskView (from a snapshot,
+  // an upsert applied while idle, or a successful op's response); `inFlight[id]`
+  // counts ops currently in flight for that task, so a failing op only rolls
+  // back to `confirmed` when it's the last one still outstanding — otherwise
+  // an older op's failure would stomp a newer op's optimistic/confirmed state.
+  const confirmed: Record<string, TaskView> = {}
+  const inFlight: Record<string, number> = {}
+
   function pushToast(message: string): void {
     const toast: Toast = { id: crypto.randomUUID(), message }
     set((s) => ({ toasts: [...s.toasts, toast] }))
@@ -65,21 +74,24 @@ export const useKb = create<KbStore>()((set, get) => {
       eventSource.onmessage = (ev: MessageEvent<string>) => {
         const event = JSON.parse(ev.data) as ServerEvent
         if (event.type === 'snapshot') {
+          for (const t of event.index.tasks) confirmed[t.id] = t
           set({ index: event.index, byId: Object.fromEntries(event.index.tasks.map((t) => [t.id, t])) })
           return
         }
         const index = get().index
         if (!index) return
         if (event.type === 'upsert') {
+          // An in-flight op for this task will overwrite byId with its own
+          // POST response when it settles, so an update here would either be
+          // redundant or, worse, clobber a newer optimistic write.
+          if ((inFlight[event.task.id] ?? 0) > 0) return
           const prev = get().byId[event.task.id]
-          const unchanged =
-            prev &&
-            prev.titleHash === event.task.titleHash &&
-            prev.bodyHash === event.task.bodyHash &&
-            prev.updated === event.task.updated
-          if (unchanged) return
+          if (prev && JSON.stringify(prev) === JSON.stringify(event.task)) return
+          confirmed[event.task.id] = event.task
           set({ index: replaceTask(index, event.task), byId: { ...get().byId, [event.task.id]: event.task } })
         } else if (event.type === 'remove') {
+          delete confirmed[event.id]
+          delete inFlight[event.id]
           const byId = { ...get().byId }
           delete byId[event.id]
           set({ index: removeFromIndex(index, event.id), byId })
@@ -88,29 +100,42 @@ export const useKb = create<KbStore>()((set, get) => {
     },
 
     async op(id, opArg, optimistic) {
-      const prevIndex = get().index
-      const prevTask = get().byId[id]
-      if (optimistic && prevTask && prevIndex) {
-        const next = optimistic(prevTask)
-        set({ index: replaceTask(prevIndex, next), byId: { ...get().byId, [id]: next } })
+      const current = get().byId[id]
+      if (optimistic && current) {
+        const next = optimistic(current)
+        const index = get().index
+        set({ byId: { ...get().byId, [id]: next }, index: index ? replaceTask(index, next) : index })
       }
+      inFlight[id] = (inFlight[id] ?? 0) + 1
+      let thrown: unknown
       try {
         const result = await apiApplyOp(id, opArg)
+        confirmed[id] = result
         const index = get().index
         set({ byId: { ...get().byId, [id]: result }, index: index ? replaceTask(index, result) : index })
       } catch (err) {
-        if (optimistic && prevTask && prevIndex) {
-          set({ index: replaceTask(prevIndex, prevTask), byId: { ...get().byId, [id]: prevTask } })
+        thrown = err
+      }
+      inFlight[id] = (inFlight[id] ?? 1) - 1
+      if (inFlight[id] <= 0) delete inFlight[id]
+      if (thrown) {
+        if (!(inFlight[id] > 0)) {
+          const base = confirmed[id]
+          if (base) {
+            const index = get().index
+            set({ byId: { ...get().byId, [id]: base }, index: index ? replaceTask(index, base) : index })
+          }
         }
-        const code = err instanceof ApiError ? err.code : undefined
-        if (code !== 'conflict') pushToast(err instanceof Error ? err.message : String(err))
-        throw err
+        const code = thrown instanceof ApiError ? thrown.code : undefined
+        if (code !== 'conflict') pushToast(thrown instanceof Error ? thrown.message : String(thrown))
+        throw thrown
       }
     },
 
     async create(input) {
       try {
         const task = await apiCreateTask(input)
+        confirmed[task.id] = task
         const index = get().index
         set({ byId: { ...get().byId, [task.id]: task }, index: index ? replaceTask(index, task) : index })
         return task
@@ -123,6 +148,8 @@ export const useKb = create<KbStore>()((set, get) => {
     async remove(id) {
       try {
         await apiRemoveTask(id)
+        delete confirmed[id]
+        delete inFlight[id]
         const index = get().index
         const byId = { ...get().byId }
         delete byId[id]
