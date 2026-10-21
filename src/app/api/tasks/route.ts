@@ -6,8 +6,12 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(): Promise<Response> {
-  const state = getState()
-  return Response.json(state.index)
+  try {
+    const state = getState()
+    return Response.json(state.index)
+  } catch (err) {
+    return errorResponse(err)
+  }
 }
 
 export async function POST(req: Request): Promise<Response> {

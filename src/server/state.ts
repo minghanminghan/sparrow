@@ -45,6 +45,21 @@ export function getState(): State {
   return globalThis.__kb
 }
 
+// A listener throwing (e.g. an SSE connection enqueueing on a closed
+// controller) must never stop other listeners from being notified, nor
+// propagate out of refresh() — refresh() runs both inside API route
+// try/catch blocks and bare inside the watcher's debounce setTimeout,
+// where an uncaught exception would crash the whole `next start` process.
+function safeEmit(emitter: EventEmitter, event: ServerEvent): void {
+  for (const listener of emitter.listeners('event')) {
+    try {
+      ;(listener as (e: ServerEvent) => void)(event)
+    } catch (err) {
+      console.error('kb: event listener failed', err)
+    }
+  }
+}
+
 export function refresh(state: State): void {
   const next = buildIndex(state.ws)
   const oldById = new Map(state.index.tasks.map((t) => [t.id, t]))
@@ -53,11 +68,11 @@ export function refresh(state: State): void {
   for (const [id, task] of nextById) {
     const prev = oldById.get(id)
     if (!prev || JSON.stringify(prev) !== JSON.stringify(task)) {
-      state.emitter.emit('event', { type: 'upsert', task } satisfies ServerEvent)
+      safeEmit(state.emitter, { type: 'upsert', task })
     }
   }
   for (const id of oldById.keys()) {
-    if (!nextById.has(id)) state.emitter.emit('event', { type: 'remove', id } satisfies ServerEvent)
+    if (!nextById.has(id)) safeEmit(state.emitter, { type: 'remove', id })
   }
 
   state.index = next

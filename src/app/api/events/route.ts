@@ -1,4 +1,4 @@
-import { getState } from '@/server/state'
+import { errorResponse, getState } from '@/server/state'
 import type { ServerEvent } from '@/server/state'
 
 export const runtime = 'nodejs'
@@ -11,32 +11,53 @@ function sse(data: string): Uint8Array {
 }
 
 export async function GET(req: Request): Promise<Response> {
-  const state = getState()
+  try {
+    const state = getState()
 
-  const stream = new ReadableStream({
-    start(controller) {
-      controller.enqueue(sse(JSON.stringify({ type: 'snapshot', index: state.index } satisfies ServerEvent)))
+    const stream = new ReadableStream({
+      start(controller) {
+        let closed = false
+        const cleanup = (): void => {
+          if (closed) return
+          closed = true
+          clearInterval(ping)
+          state.emitter.off('event', onEvent)
+          try {
+            controller.close()
+          } catch {}
+        }
 
-      const onEvent = (event: ServerEvent) => controller.enqueue(sse(JSON.stringify(event)))
-      state.emitter.on('event', onEvent)
+        // Guards against enqueueing on an already-closed/errored controller
+        // (e.g. a client that disconnected between ticks): a thrown error
+        // here would otherwise surface as an uncaught exception at the
+        // emitter/watcher callsite that triggered it.
+        const safeEnqueue = (chunk: Uint8Array): void => {
+          try {
+            controller.enqueue(chunk)
+          } catch {
+            cleanup()
+          }
+        }
 
-      const ping = setInterval(() => controller.enqueue(new TextEncoder().encode(': ping\n\n')), PING_MS)
+        const onEvent = (event: ServerEvent): void => safeEnqueue(sse(JSON.stringify(event)))
+        state.emitter.on('event', onEvent)
 
-      req.signal.addEventListener('abort', () => {
-        clearInterval(ping)
-        state.emitter.off('event', onEvent)
-        try {
-          controller.close()
-        } catch {}
-      })
-    },
-  })
+        const ping = setInterval(() => safeEnqueue(new TextEncoder().encode(': ping\n\n')), PING_MS)
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-    },
-  })
+        req.signal.addEventListener('abort', cleanup)
+
+        safeEnqueue(sse(JSON.stringify({ type: 'snapshot', index: state.index } satisfies ServerEvent)))
+      },
+    })
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+      },
+    })
+  } catch (err) {
+    return errorResponse(err)
+  }
 }
