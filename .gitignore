@@ -3,3 +3,5 @@ node_modules
 dist
 *.tsbuildinfo
 .superpowers/
+.playwright-mcp/
+next-env.d.ts
