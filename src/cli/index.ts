@@ -59,7 +59,7 @@ function printResult(result: CommandResult, jsonMode: boolean): void {
 async function runServe(values: Values): Promise<number> {
   const ws = findWorkspace({ dir: values.dir as string | undefined })
   const root = path.resolve(__dirname, '..')
-  if (!fs.existsSync(path.join(root, '.next'))) throw new KbError('usage', 'run npm run build')
+  if (!fs.existsSync(path.join(root, '.next'))) throw new KbError('usage', 'run pnpm build')
   const port = (values.port as string | undefined) ?? '4600'
   const bin = path.join(root, 'node_modules', '.bin', 'next')
   const child = spawn(bin, ['start', '-H', '127.0.0.1', '-p', port], {
