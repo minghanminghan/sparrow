@@ -1,1 +1,36 @@
 @import "tailwindcss";
+
+/* Tailwind v4 no longer gives buttons a pointer cursor. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* Custom arrow with room to its right. Unlayered so it beats px-* utilities. */
+select {
+  appearance: none;
+  padding-right: 1.75rem;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236b7280'%3E%3Cpath d='M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z'/%3E%3C/svg%3E")
+    no-repeat right 0.5rem center / 1rem;
+  background-color: white;
+}
+
+@theme {
+  --animate-panel-in: panel-in 200ms ease-out;
+  --animate-panel-out: panel-out 200ms ease-in forwards;
+
+  @keyframes panel-in {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+  }
+  @keyframes panel-out {
+    to {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+  }
+}

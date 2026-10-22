@@ -4,7 +4,7 @@ import { columnByRole, isDone, loadConfig } from './config'
 import { hash, parseTask } from './format'
 import type { Config, Task } from './types'
 
-export type Backlink = { type: 'blocked-by' | 'relates' | 'duplicated-by' | 'mentioned-in'; id: string }
+export type Backlink = { type: 'blocked-by' | 'relates' | 'mentioned-in'; id: string }
 export type TaskView = Task & {
   titleHash: string
   bodyHash: string
@@ -25,7 +25,6 @@ export function isTaskFile(name: string): boolean {
 const REVERSE_LINK: Record<Task['links'][number]['type'], Backlink['type']> = {
   blocks: 'blocked-by',
   relates: 'relates',
-  duplicates: 'duplicated-by',
 }
 
 function mentionsIn(task: Task): string[] {

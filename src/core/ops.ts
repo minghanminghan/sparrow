@@ -22,6 +22,7 @@ export type Op =
   | { type: 'addRef'; ref: Ref }
   | { type: 'removeRef'; url: string }
   | { type: 'addComment'; author: string; body: string }
+  | { type: 'editComment'; index: number; at: string; body: string }
   | { type: 'claim'; assignee: string }
 
 export type CreateInput = {
@@ -32,6 +33,8 @@ export type CreateInput = {
   assignee?: string
   body?: string
   rank?: string
+  links?: Link[]
+  refs?: Ref[]
 }
 
 const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -109,6 +112,10 @@ function apply(ws: string, config: Config, task: Task, op: Op, at: string): void
     case 'addComment':
       task.comments.push({ at, author: op.author, body: op.body })
       return
+    case 'editComment':
+      if (task.comments[op.index]?.at !== op.at) throw new KbError('conflict', 'comment changed since it was read')
+      task.comments[op.index].body = op.body
+      return
     case 'claim':
       if (task.assignee && task.assignee !== op.assignee) {
         throw new KbError('conflict', `${task.id} is already claimed by ${task.assignee}`)
@@ -169,8 +176,8 @@ export async function createTask(ws: string, input: CreateInput): Promise<Task> 
       parent: input.parent,
       due: input.due,
       assignee: input.assignee,
-      links: [],
-      refs: [],
+      links: input.links ?? [],
+      refs: input.refs ?? [],
       created: at,
       updated: at,
       body: input.body ?? '',

@@ -1,29 +1,47 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import { useKb } from '@/client/store'
 import { TaskDetail } from '@/components/detail/TaskDetail'
 
 export function TaskPanel() {
   const panelId = useKb((s) => s.panelId)
   const openPanel = useKb((s) => s.openPanel)
+  const ref = useRef<HTMLDivElement>(null)
+  // Lags panelId on close so the panel stays mounted while it slides out.
+  const [shownId, setShownId] = useState(panelId)
+  if (panelId && panelId !== shownId) setShownId(panelId)
+  const closing = !panelId && shownId !== null
 
-  if (!panelId) return null
+  useEffect(() => {
+    if (!panelId) return
+    function onPointerDown(e: PointerEvent): void {
+      const panel = ref.current
+      if (!panel || panel.contains(e.target as Node)) return
+      // Clicking another task swaps the panel's content instead of closing it.
+      if (e.target instanceof Element && e.target.closest('[data-opens-task]')) return
+      // Blur first so an open editor saves before the panel unmounts.
+      const active = document.activeElement
+      if (active instanceof HTMLElement && panel.contains(active)) active.blur()
+      openPanel(null)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [panelId, openPanel])
+
+  if (!shownId) return null
 
   return (
-    <div className="fixed inset-y-0 right-0 z-30 flex w-full max-w-md flex-col border-l border-gray-200 bg-white shadow-xl">
-      <div className="flex items-center justify-between border-b border-gray-200 p-3">
-        <span className="font-mono text-sm font-medium text-gray-700">{panelId}</span>
-        <button
-          onClick={() => openPanel(null)}
-          aria-label="Close"
-          className="rounded px-2 py-1 text-gray-500 hover:bg-gray-100"
-        >
-          Esc
-        </button>
-      </div>
-      <div data-task-id={panelId} className="flex-1 overflow-y-auto">
-        <TaskDetail id={panelId} />
-      </div>
+    <div
+      ref={ref}
+      onAnimationEnd={(e) => {
+        if (closing && e.target === e.currentTarget) setShownId(null)
+      }}
+      className={`absolute inset-y-0 right-0 z-30 w-full max-w-2xl overflow-y-auto border-l border-gray-200 bg-white shadow-xl ${
+        closing ? 'pointer-events-none animate-panel-out' : 'animate-panel-in'
+      }`}
+    >
+      <TaskDetail id={shownId} />
     </div>
   )
 }

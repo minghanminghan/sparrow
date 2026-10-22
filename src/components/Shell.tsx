@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import type { InvalidFile } from '@/core'
 import { useKb } from '@/client/store'
@@ -30,7 +30,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const invalid = useKb((s) => s.index?.invalid ?? NO_INVALID)
   const toasts = useKb((s) => s.toasts)
   const dismissToast = useKb((s) => s.dismissToast)
-  const [quickCreateOpen, setQuickCreateOpen] = useState(false)
+  const openCreate = useKb((s) => s.openCreate)
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -38,11 +38,15 @@ export function Shell({ children }: { children: ReactNode }) {
   }, [connect])
 
   useEffect(() => {
+    openPanel(null)
+  }, [pathname, openPanel])
+
+  useEffect(() => {
     function onKeyDown(e: KeyboardEvent): void {
       if (isTypingTarget(e.target)) return
       if (e.key === 'c') {
         e.preventDefault()
-        setQuickCreateOpen(true)
+        openCreate({})
       } else if (e.key === '/') {
         e.preventDefault()
         searchRef.current?.focus()
@@ -52,10 +56,10 @@ export function Shell({ children }: { children: ReactNode }) {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [openPanel])
+  }, [openPanel, openCreate])
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col">
       <header className="flex flex-wrap items-center gap-4 border-b border-gray-200 px-4 py-2">
         <nav className="flex gap-3 text-sm font-medium">
           <Link href="/" className={pathname === '/' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'}>
@@ -77,7 +81,7 @@ export function Shell({ children }: { children: ReactNode }) {
         />
         <Filters />
         <button
-          onClick={() => setQuickCreateOpen(true)}
+          onClick={() => openCreate({})}
           className="ml-auto rounded bg-gray-900 px-3 py-1 text-sm text-white hover:bg-gray-700"
         >
           + New (c)
@@ -91,10 +95,12 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <main className="flex-1">{children}</main>
+      <div className="relative min-h-0 flex-1">
+        <main className="h-full overflow-auto">{children}</main>
+        <TaskPanel />
+      </div>
 
-      <QuickCreate open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} />
-      <TaskPanel />
+      <QuickCreate />
 
       <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
         {toasts.map((t) => (

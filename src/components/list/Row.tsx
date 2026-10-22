@@ -75,6 +75,7 @@ function RowImpl({ id, depth, dimmed, selected, hasChildren, collapsed, onToggle
           e.stopPropagation()
           openPanel(task.id)
         }}
+        data-opens-task
         className="flex-1 truncate text-left font-medium text-gray-900 hover:underline"
       >
         {task.title}

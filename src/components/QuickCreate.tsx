@@ -2,38 +2,91 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
+import type { Link, Ref } from '@/core'
+import { rankBetween } from '@/core/rank'
 import { useKb } from '@/client/store'
+import { visibleColumnTasks } from '@/components/board/visibleTasks'
+import { LINK_TYPES, LinkPicker } from '@/components/detail/TaskDetail'
 
-export function QuickCreate({ open, onClose }: { open: boolean; onClose: () => void }) {
+const FIELD = 'rounded border border-gray-300 px-2 py-1 text-sm'
+
+export function QuickCreate() {
+  const createFor = useKb((s) => s.createFor)
+  const openCreate = useKb((s) => s.openCreate)
   const create = useKb((s) => s.create)
+  const columns = useKb((s) => s.index?.config.columns)
+  const byId = useKb((s) => s.byId)
   const titleRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState('')
+  const [status, setStatus] = useState('')
   const [parent, setParent] = useState('')
   const [due, setDue] = useState('')
+  const [assignee, setAssignee] = useState('')
+  const [body, setBody] = useState('')
+  const [links, setLinks] = useState<Link[]>([])
+  const [refs, setRefs] = useState<Ref[]>([])
+  const [url, setUrl] = useState('')
 
   useEffect(() => {
-    if (open) titleRef.current?.focus()
-  }, [open])
+    if (!createFor) return
+    setStatus(createFor.status ?? '')
+    titleRef.current?.focus()
+  }, [createFor])
 
-  if (!open) return null
+  if (!createFor) return null
+  const onClose = () => openCreate(null)
+
+  function reset(): void {
+    setTitle('')
+    setParent('')
+    setDue('')
+    setAssignee('')
+    setBody('')
+    setLinks([])
+    setRefs([])
+    setUrl('')
+  }
 
   async function submit(): Promise<void> {
     const t = title.trim()
     if (!t) return
+    // Opened from a column: put the new task at the top of it, like the old inline input did.
+    const state = useKb.getState()
+    const first =
+      status && status === createFor?.status && state.index
+        ? visibleColumnTasks(state.index, state.filters, status)[0]
+        : undefined
     try {
-      await create({ title: t, parent: parent.trim() || undefined, due: due.trim() || undefined })
-      setTitle('')
+      await create({
+        title: t,
+        status: status || undefined,
+        rank: first ? rankBetween(undefined, first.rank) : undefined,
+        parent: parent.trim() || undefined,
+        due: due || undefined,
+        assignee: assignee.trim() || undefined,
+        body: body.trim() || undefined,
+        links,
+        refs,
+      })
+      reset()
       titleRef.current?.focus()
     } catch {
       // the store already pushed a toast with the error
     }
   }
 
+  function addRef(): void {
+    const u = url.trim()
+    if (!u) return
+    setUrl('')
+    if (!refs.some((r) => r.url === u)) setRefs([...refs, { url: u }])
+  }
+
   function onKeyDown(e: KeyboardEvent): void {
     if (e.key === 'Escape') {
       e.stopPropagation()
       onClose()
-    } else if (e.key === 'Enter') {
+    } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault()
       void submit()
     }
@@ -42,7 +95,7 @@ export function QuickCreate({ open, onClose }: { open: boolean; onClose: () => v
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/20 pt-24" onClick={onClose}>
       <div
-        className="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-4 shadow-xl"
+        className="max-h-[80vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 shadow-xl"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={onKeyDown}
       >
@@ -50,22 +103,105 @@ export function QuickCreate({ open, onClose }: { open: boolean; onClose: () => v
           ref={titleRef}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              void submit()
+            }
+          }}
           placeholder="Task title"
           className="w-full border-b border-gray-300 pb-2 text-lg outline-none"
         />
-        <div className="mt-3 flex gap-2 text-sm">
+        <div className="flex flex-wrap gap-2">
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className={FIELD}>
+            <option value="">Default status</option>
+            {columns?.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={FIELD} />
+          <input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="Unassigned" className={FIELD} />
           <input
             value={parent}
             onChange={(e) => setParent(e.target.value)}
             placeholder="Parent ID (optional)"
-            className="flex-1 rounded border border-gray-300 px-2 py-1"
+            className={`flex-1 ${FIELD}`}
           />
+        </div>
+
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-gray-700">Description</h2>
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            className="field-sizing-content min-h-24 w-full rounded border border-gray-300 p-2 text-sm outline-none"
+          />
+        </section>
+
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-gray-700">Links</h2>
+          <ul className="mb-1 space-y-0.5 text-sm">
+            {links.map((l) => (
+              <li key={`${l.type}-${l.id}`} className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">{LINK_TYPES.find((o) => o.value === l.type)?.label}</span>
+                {l.id} — {byId[l.id]?.title}
+                <button
+                  onClick={() => setLinks(links.filter((x) => x !== l))}
+                  aria-label="Remove link"
+                  className="text-gray-400 hover:text-gray-700"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+          <LinkPicker
+            onAdd={(link) => {
+              if (!links.some((l) => l.type === link.type && l.id === link.id)) setLinks([...links, link])
+            }}
+          />
+        </section>
+
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-gray-700">References</h2>
+          <ul className="mb-1 space-y-0.5 text-sm">
+            {refs.map((r) => (
+              <li key={r.url} className="flex items-center gap-2">
+                <span className="truncate">{r.url}</span>
+                <button
+                  onClick={() => setRefs(refs.filter((x) => x !== r))}
+                  aria-label="Remove reference"
+                  className="text-gray-400 hover:text-gray-700"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
           <input
-            type="date"
-            value={due}
-            onChange={(e) => setDue(e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                addRef()
+              }
+            }}
+            placeholder="Paste a URL…"
+            className="w-full rounded border border-gray-200 px-2 py-1 text-sm outline-none focus:border-gray-400"
           />
+        </section>
+
+        <div className="flex items-center justify-end gap-3">
+          <span className="text-xs text-gray-400">⌘Enter to create</span>
+          <button
+            onClick={() => void submit()}
+            className="rounded bg-gray-900 px-3 py-1 text-sm text-white hover:bg-gray-700"
+          >
+            Create
+          </button>
         </div>
       </div>
     </div>

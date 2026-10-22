@@ -1,13 +1,25 @@
 'use client'
 
 import { useState } from 'react'
-import { DndContext, DragOverlay, PointerSensor, closestCorners, useSensor, useSensors } from '@dnd-kit/core'
-import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
+import { DndContext, DragOverlay, PointerSensor, closestCorners, pointerWithin, useSensor, useSensors } from '@dnd-kit/core'
+import type { CollisionDetection, DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import { rankBetween } from '@/core/rank'
 import { useKb } from '@/client/store'
 import { Column } from './Column'
 import { Card } from './Card'
 import { visibleColumnTasks } from './visibleTasks'
+
+// Anywhere inside a column counts as dropping into it: only that column and
+// its cards compete. Between columns, fall back to the nearest target overall.
+const collisionDetection: CollisionDetection = (args) => {
+  const col = pointerWithin(args).find((c) => String(c.id).startsWith('col:'))
+  if (!col) return closestCorners(args)
+  const listId = `list:${String(col.id).slice(4)}`
+  const droppableContainers = args.droppableContainers.filter(
+    (c) => c.id === col.id || c.data.current?.sortable?.containerId === listId,
+  )
+  return closestCorners({ ...args, droppableContainers })
+}
 
 export function Board() {
   // Only config/columns is subscribed here — it's a stable reference across
@@ -87,7 +99,7 @@ export function Board() {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={collisionDetection}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >

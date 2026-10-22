@@ -95,7 +95,6 @@ export const COMMANDS: CommandDef[] = [
     flags: [
       { name: 'blocks', type: 'string', desc: 'id of the task this one blocks' },
       { name: 'relates', type: 'string', desc: 'id of a related task' },
-      { name: 'duplicates', type: 'string', desc: 'id of the task this one duplicates' },
     ],
   },
   {
@@ -104,7 +103,6 @@ export const COMMANDS: CommandDef[] = [
     flags: [
       { name: 'blocks', type: 'string', desc: 'id of the task this one blocks' },
       { name: 'relates', type: 'string', desc: 'id of a related task' },
-      { name: 'duplicates', type: 'string', desc: 'id of the task this one duplicates' },
     ],
   },
   {
@@ -294,9 +292,9 @@ async function cmdComment(ws: string, id: string, values: Values): Promise<Comma
 }
 
 function linkTypeAndTarget(values: Values): { type: LinkType; target: string } {
-  const kinds: LinkType[] = ['blocks', 'relates', 'duplicates']
+  const kinds: LinkType[] = ['blocks', 'relates']
   const given = kinds.filter((k) => values[k] !== undefined)
-  if (given.length !== 1) throw new KbError('usage', 'specify exactly one of --blocks, --relates, --duplicates')
+  if (given.length !== 1) throw new KbError('usage', 'specify exactly one of --blocks, --relates')
   return { type: given[0], target: values[given[0]] as string }
 }
 

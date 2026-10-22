@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, MouseEvent } from 'react'
 import NextLink from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { Backlink, Link as TaskLink, LinkType, Ref, TaskView } from '@/core'
@@ -28,6 +28,14 @@ function groupBy<T, K extends string>(items: T[], keyFn: (t: T) => K): Partial<R
     ;(out[k] ??= []).push(item)
   }
   return out
+}
+
+// Clicks on a rendered link should follow it, not start editing.
+const isLinkClick = (e: MouseEvent) => e.target instanceof Element && e.target.closest('a') !== null
+
+function onEditorKeyDown(e: KeyboardEvent<HTMLTextAreaElement>, cancel: () => void): void {
+  if (e.key === 'Escape') cancel()
+  else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') e.currentTarget.blur()
 }
 
 // Shared by the title and body editors: both save with a captured
@@ -78,7 +86,7 @@ function Breadcrumb({ task }: { task: TaskView }) {
   if (chain.length === 0) return null
 
   return (
-    <div className="flex flex-wrap items-center gap-1 text-xs text-gray-500">
+    <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-gray-500">
       {chain.map((t, i) => (
         <span key={t.id} className="flex items-center gap-1">
           {i > 0 && <span>/</span>}
@@ -92,7 +100,7 @@ function Breadcrumb({ task }: { task: TaskView }) {
   )
 }
 
-function TitleEditor({ task }: { task: TaskView }) {
+function TitleEditor({ task, fullPage }: { task: TaskView; fullPage: boolean }) {
   const op = useKb((s) => s.op)
   const { state, startEdit, save, discard } = useHashedField((title, baseHash) =>
     op(task.id, { type: 'setTitle', title, baseHash }, (t) => ({ ...t, title })),
@@ -104,7 +112,13 @@ function TitleEditor({ task }: { task: TaskView }) {
         onClick={() => startEdit(task.title, task.titleHash)}
         className="cursor-text text-xl font-semibold text-gray-900"
       >
-        {task.title}
+        {fullPage ? (
+          task.title
+        ) : (
+          <NextLink href={`/t/${task.id}`} onClick={(e) => e.stopPropagation()} className="hover:underline">
+            {task.title}
+          </NextLink>
+        )}
       </h1>
     )
   }
@@ -160,14 +174,6 @@ function BodyEditor({ task }: { task: TaskView }) {
   const { state, startEdit, save, discard } = useHashedField((body, baseHash) =>
     op(task.id, { type: 'setBody', body, baseHash }, (t) => ({ ...t, body })),
   )
-  const [preview, setPreview] = useState(false)
-
-  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>): void {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && state.mode === 'edit') {
-      e.preventDefault()
-      void save(state.draft, state.baseHash)
-    }
-  }
 
   if (state.mode === 'conflict') {
     return (
@@ -199,60 +205,33 @@ function BodyEditor({ task }: { task: TaskView }) {
   }
 
   if (state.mode === 'edit') {
+    const commit = (): void => {
+      if (state.draft === task.body) discard()
+      else void save(state.draft, state.baseHash)
+    }
     return (
-      <div>
-        <div className="mb-1 flex gap-2 text-xs">
-          <button onClick={() => setPreview(false)} className={preview ? 'text-gray-500' : 'font-medium'}>
-            Write
-          </button>
-          <button onClick={() => setPreview(true)} className={preview ? 'font-medium' : 'text-gray-500'}>
-            Preview
-          </button>
-          <span className="ml-auto text-gray-400">⌘Enter to save</span>
-        </div>
-        {preview ? (
-          <div className="min-h-32 rounded border border-gray-200 p-2">
-            <Markdown>{state.draft}</Markdown>
-          </div>
-        ) : (
-          <textarea
-            autoFocus
-            value={state.draft}
-            onChange={(e) => startEdit(e.target.value, state.baseHash)}
-            onKeyDown={onKeyDown}
-            rows={8}
-            className="w-full rounded border border-gray-300 p-2 text-sm outline-none"
-          />
-        )}
-        <div className="mt-1 flex gap-2">
-          <button
-            onClick={() => void save(state.draft, state.baseHash)}
-            className="rounded bg-gray-900 px-2 py-1 text-xs text-white"
-          >
-            Save
-          </button>
-          <button onClick={discard} className="rounded border border-gray-300 px-2 py-1 text-xs">
-            Cancel
-          </button>
-        </div>
-      </div>
+      <textarea
+        autoFocus
+        value={state.draft}
+        onChange={(e) => startEdit(e.target.value, state.baseHash)}
+        onBlur={commit}
+        onKeyDown={(e) => onEditorKeyDown(e, discard)}
+        className="field-sizing-content min-h-32 w-full rounded border border-gray-300 p-2 text-sm outline-none"
+      />
     )
   }
 
   return (
-    <div>
-      <div className="mb-1 flex justify-end">
-        <button
-          onClick={() => startEdit(task.body, task.bodyHash)}
-          className="text-xs text-gray-500 hover:text-gray-700"
-        >
-          Edit
-        </button>
-      </div>
+    <div
+      onClick={(e) => {
+        if (!isLinkClick(e)) startEdit(task.body, task.bodyHash)
+      }}
+      className="cursor-text rounded border border-transparent p-2 hover:border-gray-200"
+    >
       {task.body.trim() ? (
         <Markdown>{task.body}</Markdown>
       ) : (
-        <div className="text-sm text-gray-400">No description.</div>
+        <div className="text-sm text-gray-400">Add a description…</div>
       )}
     </div>
   )
@@ -326,22 +305,19 @@ function Subtasks({ task }: { task: TaskView }) {
   )
 }
 
-const LINK_TYPES: { value: LinkType; label: string }[] = [
+export const LINK_TYPES: { value: LinkType; label: string }[] = [
   { value: 'blocks', label: 'Blocks' },
   { value: 'relates', label: 'Relates to' },
-  { value: 'duplicates', label: 'Duplicates' },
 ]
 
 const BACKLINK_LABEL: Record<Backlink['type'], string> = {
   'blocked-by': 'Blocked by',
   relates: 'Related',
-  'duplicated-by': 'Duplicated by',
   'mentioned-in': 'Mentioned in',
 }
 
-function LinkPicker({ task }: { task: TaskView }) {
+export function LinkPicker({ excludeId, onAdd }: { excludeId?: string; onAdd: (link: TaskLink) => void }) {
   const tasks = useKb((s) => s.index?.tasks ?? [])
-  const op = useKb((s) => s.op)
   const [type, setType] = useState<LinkType>('blocks')
   const [query, setQuery] = useState('')
 
@@ -349,15 +325,12 @@ function LinkPicker({ task }: { task: TaskView }) {
     const q = query.trim().toLowerCase()
     if (!q) return []
     return tasks
-      .filter((t) => t.id !== task.id && (t.id.toLowerCase().includes(q) || t.title.toLowerCase().includes(q)))
+      .filter((t) => t.id !== excludeId && (t.id.toLowerCase().includes(q) || t.title.toLowerCase().includes(q)))
       .slice(0, 8)
-  }, [tasks, query, task.id])
+  }, [tasks, query, excludeId])
 
   function addLink(id: string): void {
-    void op(task.id, { type: 'addLink', link: { type, id } }, (t) => ({
-      ...t,
-      links: t.links.some((l) => l.type === type && l.id === id) ? t.links : [...t.links, { type, id }],
-    }))
+    onAdd({ type, id })
     setQuery('')
   }
 
@@ -379,7 +352,10 @@ function LinkPicker({ task }: { task: TaskView }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && results[0]) addLink(results[0].id)
+            if (e.key === 'Enter' && results[0]) {
+              e.preventDefault()
+              addLink(results[0].id)
+            }
           }}
           placeholder="Search by id or title…"
           className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs"
@@ -410,6 +386,13 @@ function Links({ task }: { task: TaskView }) {
 
   const outgoing = groupBy(task.links, (l) => l.type)
   const backlinks = groupBy(task.backlinks, (b) => b.type)
+
+  function add(link: TaskLink): void {
+    void op(task.id, { type: 'addLink', link }, (t) => ({
+      ...t,
+      links: t.links.some((l) => l.type === link.type && l.id === link.id) ? t.links : [...t.links, link],
+    }))
+  }
 
   function remove(link: TaskLink): void {
     void op(task.id, { type: 'removeLink', link }, (t) => ({
@@ -448,7 +431,7 @@ function Links({ task }: { task: TaskView }) {
           </div>
         )
       })}
-      {(['blocked-by', 'relates', 'duplicated-by', 'mentioned-in'] as const).map((type) => {
+      {(['blocked-by', 'relates', 'mentioned-in'] as const).map((type) => {
         const items = backlinks[type]
         if (!items || items.length === 0) return null
         return (
@@ -470,7 +453,7 @@ function Links({ task }: { task: TaskView }) {
           </div>
         )
       })}
-      <LinkPicker task={task} />
+      <LinkPicker excludeId={task.id} onAdd={add} />
     </div>
   )
 }
@@ -523,6 +506,51 @@ function References({ task }: { task: TaskView }) {
   )
 }
 
+function CommentItem({ task, index }: { task: TaskView; index: number }) {
+  const op = useKb((s) => s.op)
+  const c = task.comments[index]
+  const [draft, setDraft] = useState<string | null>(null)
+
+  function commit(): void {
+    const body = draft?.trim() ?? ''
+    setDraft(null)
+    if (!body || body === c.body) return
+    op(task.id, { type: 'editComment', index, at: c.at, body }, (t) => ({
+      ...t,
+      comments: t.comments.map((x, i) => (i === index ? { ...x, body } : x)),
+    })).catch(() => {
+      // the store already pushed a toast with the error
+    })
+  }
+
+  return (
+    <div className="rounded border border-gray-200 p-2 text-sm">
+      <div className="mb-1 text-xs text-gray-500">
+        {c.author} · {c.at}
+      </div>
+      {draft === null ? (
+        <div
+          onClick={(e) => {
+            if (!isLinkClick(e)) setDraft(c.body)
+          }}
+          className="cursor-text"
+        >
+          <Markdown>{c.body}</Markdown>
+        </div>
+      ) : (
+        <textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => onEditorKeyDown(e, () => setDraft(null))}
+          className="field-sizing-content w-full rounded border border-gray-300 p-1 text-sm outline-none"
+        />
+      )}
+    </div>
+  )
+}
+
 function Comments({ task }: { task: TaskView }) {
   const op = useKb((s) => s.op)
   const author = useKb((s) => s.index?.config.user)
@@ -541,12 +569,7 @@ function Comments({ task }: { task: TaskView }) {
   return (
     <div className="space-y-3">
       {task.comments.map((c, i) => (
-        <div key={i} className="rounded border border-gray-200 p-2 text-sm">
-          <div className="mb-1 text-xs text-gray-500">
-            {c.author} · {c.at}
-          </div>
-          <Markdown>{c.body}</Markdown>
-        </div>
+        <CommentItem key={`${i}-${c.at}`} task={task} index={i} />
       ))}
       <div>
         <textarea
@@ -589,15 +612,16 @@ export function TaskDetail({ id, fullPage = false }: { id: string; fullPage?: bo
   return (
     <div className="space-y-6 p-4">
       <div>
-        <div className="mb-1 flex items-center justify-between">
-          <Breadcrumb task={task} />
-          {!fullPage && (
-            <NextLink href={`/t/${task.id}`} className="text-xs text-gray-500 hover:underline">
-              Open full page
-            </NextLink>
-          )}
+        <Breadcrumb task={task} />
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono text-sm font-medium text-gray-400">{task.id}</span>
+          <div className="min-w-0 flex-1">
+            <TitleEditor task={task} fullPage={fullPage} />
+          </div>
+          <button onClick={() => void handleDelete()} className="text-sm text-red-600 hover:underline">
+            Delete
+          </button>
         </div>
-        <TitleEditor task={task} />
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <select
             value={task.status}
@@ -626,9 +650,6 @@ export function TaskDetail({ id, fullPage = false }: { id: string; fullPage?: bo
             assignee={task.assignee}
             className="rounded border border-gray-300 px-2 py-1 text-sm"
           />
-          <button onClick={() => void handleDelete()} className="ml-auto text-sm text-red-600 hover:underline">
-            Delete
-          </button>
         </div>
       </div>
 

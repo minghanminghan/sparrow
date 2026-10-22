@@ -20,12 +20,15 @@ type KbStore = {
   byId: Record<string, TaskView>
   filters: Filters
   panelId: string | null
+  // Non-null while the new-task modal is open; `status` is set when opened from a board column.
+  createFor: { status?: string } | null
   toasts: Toast[]
   connect(): void
   op(id: string, op: Op, optimistic?: (t: TaskView) => TaskView): Promise<void>
   create(input: CreateInput): Promise<TaskView>
   remove(id: string): Promise<void>
   openPanel(id: string | null): void
+  openCreate(v: { status?: string } | null): void
   setFilters(p: Partial<Filters>): void
   dismissToast(id: string): void
 }
@@ -66,6 +69,7 @@ export const useKb = create<KbStore>()((set, get) => {
     byId: {},
     filters: { q: '', hideSubtasks: false, showDone: false },
     panelId: null,
+    createFor: null,
     toasts: [],
 
     connect() {
@@ -166,6 +170,10 @@ export const useKb = create<KbStore>()((set, get) => {
 
     openPanel(id) {
       set({ panelId: id })
+    },
+
+    openCreate(v) {
+      set({ createFor: v })
     },
 
     setFilters(p) {

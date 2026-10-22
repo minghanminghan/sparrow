@@ -39,6 +39,7 @@ function CardImpl({ taskId, dragOverlay = false }: { taskId: string; dragOverlay
       {...(dragOverlay ? {} : attributes)}
       {...(dragOverlay ? {} : listeners)}
       onClick={() => openPanel(task.id)}
+      data-opens-task
       className={`rounded-md border border-gray-200 bg-white p-2 text-sm shadow-sm ${
         dragOverlay ? 'rotate-2 shadow-lg' : 'cursor-grab hover:border-gray-300'
       }`}
