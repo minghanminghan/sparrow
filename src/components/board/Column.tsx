@@ -46,7 +46,7 @@ export function Column({ column }: { column: ColumnConfig }) {
   }
 
   return (
-    <div className="flex w-72 shrink-0 flex-col rounded-lg bg-gray-50">
+    <div className="flex w-72 shrink-0 flex-col rounded-lg bg-gray-50 lg:w-auto lg:min-w-56 lg:max-w-md lg:flex-1 xl:min-w-64 2xl:max-w-xl">
       <div className="flex items-center justify-between px-3 py-2">
         <h2 className="text-sm font-semibold text-gray-700">{column.name}</h2>
         <span className="text-xs text-gray-400">{ids.length}</span>

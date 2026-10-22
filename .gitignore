@@ -5,3 +5,5 @@ dist
 .superpowers/
 .playwright-mcp/
 next-env.d.ts
+.kb
+.env
