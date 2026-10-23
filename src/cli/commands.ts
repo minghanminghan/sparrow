@@ -7,10 +7,8 @@ import {
   deleteTask,
   EXIT,
   findWorkspace,
-  initWorkspace,
   isDone,
   KbError,
-  nextTask,
   rankBetween,
   readTask,
   viewTask,
@@ -18,21 +16,19 @@ import {
 import type { LinkType, Op, TaskView } from '../core'
 
 export type FlagType = 'string' | 'boolean'
-export type FlagDef = { name: string; type: FlagType; desc: string }
-export type CommandDef = { name: string; summary: string; flags: FlagDef[] }
+export type FlagDef = { name: string; short?: string; type: FlagType; desc: string }
+export type CommandDef = { name: string; summary: string; args?: string; flags: FlagDef[] }
 export type Values = Record<string, string | boolean | undefined>
 
 export const GLOBAL_FLAGS: FlagDef[] = [
-  { name: 'dir', type: 'string', desc: 'workspace directory (default: KB_DIR, then nearest .kanban/)' },
   { name: 'json', type: 'boolean', desc: 'force JSON output' },
+  { name: 'help', short: 'h', type: 'boolean', desc: 'Print help' },
 ]
 
 export const COMMANDS: CommandDef[] = [
-  { name: 'init', summary: 'Create .kanban/, tasks/, AGENTS.md.', flags: [{ name: 'prefix', type: 'string', desc: 'ID prefix (default KB)' }] },
-  { name: 'serve', summary: 'Start the web app for this workspace.', flags: [{ name: 'port', type: 'string', desc: 'port to bind (default 4600)' }] },
   {
     name: 'list',
-    summary: 'List tasks, ordered by rank.',
+    summary: 'List tasks, ordered by rank',
     flags: [
       { name: 'status', type: 'string', desc: 'filter by status' },
       { name: 'parent', type: 'string', desc: 'filter by parent id' },
@@ -41,12 +37,14 @@ export const COMMANDS: CommandDef[] = [
       { name: 'overdue', type: 'boolean', desc: 'filter: due before today (local)' },
       { name: 'tree', type: 'boolean', desc: 'order children under parents' },
       { name: 'all', type: 'boolean', desc: 'include done tasks' },
+      { name: 'limit', type: 'string', desc: 'max tasks to return (default 20)' },
+      { name: 'offset', type: 'string', desc: 'tasks to skip (default 0)' },
     ],
   },
-  { name: 'show', summary: 'Show full task detail (id is positional).', flags: [] },
+  { name: 'show', summary: 'Show full task detail', args: '<ID>', flags: [] },
   {
     name: 'create',
-    summary: 'Create a new task.',
+    summary: 'Create a new task',
     flags: [
       { name: 'title', type: 'string', desc: 'task title (required)' },
       { name: 'parent', type: 'string', desc: 'parent task id' },
@@ -59,30 +57,29 @@ export const COMMANDS: CommandDef[] = [
   },
   {
     name: 'update',
-    summary: 'Update task fields (id is positional).',
+    summary: 'Update task fields',
+    args: '<ID>',
     flags: [
       { name: 'title', type: 'string', desc: 'new title' },
-      { name: 'base-hash', type: 'string', desc: 'expected titleHash, for conflict checking' },
+      { name: 'title-hash', type: 'string', desc: 'expected titleHash, for conflict checking' },
+      { name: 'body', type: 'string', desc: 'replace description, or "-" for stdin' },
+      { name: 'body-file', type: 'string', desc: 'replace description from a file' },
+      { name: 'body-hash', type: 'string', desc: 'expected bodyHash, for conflict checking' },
       { name: 'status', type: 'string', desc: 'new status' },
       { name: 'due', type: 'string', desc: 'YYYY-MM-DD, or "none" to clear' },
       { name: 'assignee', type: 'string', desc: 'assignee, or "none" to clear' },
       { name: 'parent', type: 'string', desc: 'new parent task id' },
       { name: 'before', type: 'string', desc: 'rank just before this task id, same status' },
       { name: 'after', type: 'string', desc: 'rank just after this task id, same status' },
-    ],
-  },
-  {
-    name: 'body',
-    summary: 'Replace the task description (id is positional).',
-    flags: [
-      { name: 'body', type: 'string', desc: 'body text, or "-" for stdin' },
-      { name: 'body-file', type: 'string', desc: 'path to a file with body text' },
-      { name: 'base-hash', type: 'string', desc: 'expected bodyHash, for conflict checking' },
+      { name: 'ref', type: 'string', desc: 'add an external reference URL' },
+      { name: 'ref-label', type: 'string', desc: 'label for --ref' },
+      { name: 'ref-remove', type: 'boolean', desc: 'remove the --ref URL instead of adding it' },
     ],
   },
   {
     name: 'comment',
-    summary: 'Add a comment to a task (id is positional).',
+    summary: 'Add a comment to a task',
+    args: '<ID>',
     flags: [
       { name: 'body', type: 'string', desc: 'comment text, or "-" for stdin' },
       { name: 'body-file', type: 'string', desc: 'path to a file with comment text' },
@@ -91,58 +88,39 @@ export const COMMANDS: CommandDef[] = [
   },
   {
     name: 'link',
-    summary: 'Add a typed link to another task (id is positional).',
+    summary: 'Add or remove a typed link to another task',
+    args: '<ID>',
     flags: [
       { name: 'blocks', type: 'string', desc: 'id of the task this one blocks' },
       { name: 'relates', type: 'string', desc: 'id of a related task' },
+      { name: 'remove', type: 'boolean', desc: 'remove the link instead of adding it' },
     ],
   },
-  {
-    name: 'unlink',
-    summary: 'Remove a typed link (id is positional).',
-    flags: [
-      { name: 'blocks', type: 'string', desc: 'id of the task this one blocks' },
-      { name: 'relates', type: 'string', desc: 'id of a related task' },
-    ],
-  },
-  {
-    name: 'ref',
-    summary: 'Add an external reference (id is positional).',
-    flags: [
-      { name: 'url', type: 'string', desc: 'reference URL (required)' },
-      { name: 'label', type: 'string', desc: 'optional label' },
-    ],
-  },
-  {
-    name: 'unref',
-    summary: 'Remove an external reference (id is positional).',
-    flags: [{ name: 'url', type: 'string', desc: 'reference URL (required)' }],
-  },
-  {
-    name: 'next',
-    summary: 'Show the highest-ranked available task.',
-    flags: [{ name: 'assignee', type: 'string', desc: 'include tasks already assigned to this assignee' }],
-  },
-  {
-    name: 'claim',
-    summary: 'Claim a task and move it to the active column (id is positional).',
-    flags: [{ name: 'assignee', type: 'string', desc: 'assignee (required)' }],
-  },
-  { name: 'delete', summary: 'Move a task to trash (id is positional).', flags: [] },
-  { name: 'help', summary: 'List every command, flag, and exit code.', flags: [] },
+  { name: 'delete', summary: 'Move a task to trash', args: '<ID>', flags: [] },
+  { name: 'help', summary: 'Print this message or the help of the given command', args: '[COMMAND]', flags: [] },
 ]
 
 export type CommandResult =
   | { kind: 'task'; value: TaskView }
-  | { kind: 'maybeTask'; value: TaskView | null }
-  | { kind: 'tasks'; value: TaskView[]; lines: { task: TaskView; depth: number }[] }
-  | { kind: 'init'; value: { ws: string } }
+  | { kind: 'detail'; value: TaskView }
+  | { kind: 'tasks'; value: { total: number; tasks: TaskView[] }; offset: number; lines: { task: TaskView; depth: number }[] }
   | { kind: 'deleted'; value: { id: string; deleted: true } }
-  | { kind: 'help'; value: { commands: CommandDef[]; globalFlags: FlagDef[]; exitCodes: Record<string, number> } }
+  | { kind: 'help'; value: HelpValue }
+
+export type HelpValue = { command?: string; commands: CommandDef[]; globalFlags: FlagDef[]; exitCodes: Record<string, number> }
+
+const ID_FLAGS = ['parent', 'before', 'after', 'blocks', 'relates']
 
 function requireOneId(positionals: string[]): string {
   if (positionals.length !== 1) throw new KbError('usage', 'expected exactly one task id')
   return positionals[0]
+}
+
+function intFlag(values: Values, name: string, fallback: number): number {
+  const raw = values[name] as string | undefined
+  if (raw === undefined) return fallback
+  if (!/^\d+$/.test(raw)) throw new KbError('usage', `--${name} must be a non-negative integer`)
+  return Number(raw)
 }
 
 function readBodyInput(values: Values): string | undefined {
@@ -169,20 +147,19 @@ async function freshView(ws: string, id: string): Promise<TaskView> {
   return viewTask(buildIndex(ws), id)!
 }
 
-function cmdInit(values: Values): CommandResult {
-  const dir = path.resolve((values.dir as string | undefined) ?? process.env.KB_DIR ?? process.cwd())
-  initWorkspace(dir, (values.prefix as string | undefined) ?? 'KB')
-  return { kind: 'init', value: { ws: dir } }
-}
-
-function cmdHelp(): CommandResult {
-  return { kind: 'help', value: { commands: COMMANDS, globalFlags: GLOBAL_FLAGS, exitCodes: { ok: 0, ...EXIT } } }
+function cmdHelp(positionals: string[]): CommandResult {
+  const exitCodes = { ok: 0, ...EXIT }
+  const name = positionals[0]
+  if (name === undefined) return { kind: 'help', value: { commands: COMMANDS, globalFlags: GLOBAL_FLAGS, exitCodes } }
+  const cmd = COMMANDS.find((c) => c.name === name)
+  if (!cmd) throw new KbError('usage', `unknown command "${name}"`)
+  return { kind: 'help', value: { command: name, commands: [cmd], globalFlags: GLOBAL_FLAGS, exitCodes } }
 }
 
 function cmdShow(ws: string, id: string): CommandResult {
   const view = viewTask(buildIndex(ws), id)
   if (!view) throw new KbError('not_found', `task ${id} not found`)
-  return { kind: 'task', value: view }
+  return { kind: 'detail', value: view }
 }
 
 function filterTasks(ws: string, values: Values): TaskView[] {
@@ -224,13 +201,10 @@ function treeLines(tasks: TaskView[]): { task: TaskView; depth: number }[] {
 
 function cmdList(ws: string, values: Values): CommandResult {
   const tasks = filterTasks(ws, values)
-  const lines = values.tree ? treeLines(tasks) : tasks.map((t) => ({ task: t, depth: 0 }))
-  return { kind: 'tasks', value: lines.map((l) => l.task), lines }
-}
-
-function cmdNext(ws: string, values: Values): CommandResult {
-  const task = nextTask(buildIndex(ws), values.assignee as string | undefined)
-  return { kind: 'maybeTask', value: task }
+  const offset = intFlag(values, 'offset', 0)
+  const all = values.tree ? treeLines(tasks) : tasks.map((t) => ({ task: t, depth: 0 }))
+  const lines = all.slice(offset, offset + intFlag(values, 'limit', 20))
+  return { kind: 'tasks', value: { total: all.length, tasks: lines.map((l) => l.task) }, offset, lines }
 }
 
 async function cmdCreate(ws: string, values: Values): Promise<CommandResult> {
@@ -264,7 +238,12 @@ async function cmdUpdate(ws: string, id: string, values: Values): Promise<Comman
   const apply = async (op: Op): Promise<void> => {
     task = await applyOp(ws, id, op)
   }
-  if (values.title !== undefined) await apply({ type: 'setTitle', title: values.title as string, baseHash: values['base-hash'] as string | undefined })
+  if ((values['ref-label'] !== undefined || values['ref-remove']) && values.ref === undefined) {
+    throw new KbError('usage', '--ref-label and --ref-remove require --ref')
+  }
+  if (values.title !== undefined) await apply({ type: 'setTitle', title: values.title as string, baseHash: values['title-hash'] as string | undefined })
+  const body = readBodyInput(values)
+  if (body !== undefined) await apply({ type: 'setBody', body, baseHash: values['body-hash'] as string | undefined })
   if (values.status !== undefined) await apply({ type: 'setStatus', status: values.status as string })
   if (values.due !== undefined) await apply({ type: 'setDue', due: values.due === 'none' ? null : (values.due as string) })
   if (values.assignee !== undefined) {
@@ -275,12 +254,11 @@ async function cmdUpdate(ws: string, id: string, values: Values): Promise<Comman
     const rank = neighborRank(ws, task.status, id, values.before as string | undefined, values.after as string | undefined)
     await apply({ type: 'setRank', rank })
   }
-  return { kind: 'task', value: await freshView(ws, id) }
-}
-
-async function cmdBody(ws: string, id: string, values: Values): Promise<CommandResult> {
-  const body = requireBody(values, 'body')
-  await applyOp(ws, id, { type: 'setBody', body, baseHash: values['base-hash'] as string | undefined })
+  if (values.ref !== undefined) {
+    const url = values.ref as string
+    const label = values['ref-label'] as string | undefined
+    await apply(values['ref-remove'] ? { type: 'removeRef', url } : { type: 'addRef', ref: label ? { url, label } : { url } })
+  }
   return { kind: 'task', value: await freshView(ws, id) }
 }
 
@@ -298,32 +276,10 @@ function linkTypeAndTarget(values: Values): { type: LinkType; target: string } {
   return { type: given[0], target: values[given[0]] as string }
 }
 
-async function cmdLink(ws: string, id: string, values: Values, remove: boolean): Promise<CommandResult> {
+async function cmdLink(ws: string, id: string, values: Values): Promise<CommandResult> {
   const { type, target } = linkTypeAndTarget(values)
-  const op: Op = remove ? { type: 'removeLink', link: { type, id: target } } : { type: 'addLink', link: { type, id: target } }
+  const op: Op = values.remove ? { type: 'removeLink', link: { type, id: target } } : { type: 'addLink', link: { type, id: target } }
   await applyOp(ws, id, op)
-  return { kind: 'task', value: await freshView(ws, id) }
-}
-
-async function cmdRef(ws: string, id: string, values: Values): Promise<CommandResult> {
-  const url = values.url as string | undefined
-  if (!url) throw new KbError('usage', 'ref requires --url')
-  const label = values.label as string | undefined
-  await applyOp(ws, id, { type: 'addRef', ref: label ? { url, label } : { url } })
-  return { kind: 'task', value: await freshView(ws, id) }
-}
-
-async function cmdUnref(ws: string, id: string, values: Values): Promise<CommandResult> {
-  const url = values.url as string | undefined
-  if (!url) throw new KbError('usage', 'unref requires --url')
-  await applyOp(ws, id, { type: 'removeRef', url })
-  return { kind: 'task', value: await freshView(ws, id) }
-}
-
-async function cmdClaim(ws: string, id: string, values: Values): Promise<CommandResult> {
-  const assignee = values.assignee as string | undefined
-  if (!assignee) throw new KbError('usage', 'claim requires --assignee')
-  await applyOp(ws, id, { type: 'claim', assignee })
   return { kind: 'task', value: await freshView(ws, id) }
 }
 
@@ -333,10 +289,13 @@ async function cmdDelete(ws: string, id: string): Promise<CommandResult> {
 }
 
 export async function runCommand(name: string, values: Values, positionals: string[]): Promise<CommandResult> {
-  if (name === 'init') return cmdInit(values)
-  if (name === 'help') return cmdHelp()
+  if (name === 'help') return cmdHelp(positionals)
 
-  const ws = findWorkspace({ dir: values.dir as string | undefined })
+  const ws = findWorkspace()
+  const ids = buildIndex(ws).tasks.map((t) => t.id)
+  const resolve = (id: string) => ids.find((t) => t.toLowerCase() === id.toLowerCase()) ?? id
+  for (const k of ID_FLAGS) if (typeof values[k] === 'string') values[k] = resolve(values[k] as string)
+  positionals = positionals.map(resolve)
   switch (name) {
     case 'list':
       return cmdList(ws, values)
@@ -346,22 +305,10 @@ export async function runCommand(name: string, values: Values, positionals: stri
       return cmdCreate(ws, values)
     case 'update':
       return cmdUpdate(ws, requireOneId(positionals), values)
-    case 'body':
-      return cmdBody(ws, requireOneId(positionals), values)
     case 'comment':
       return cmdComment(ws, requireOneId(positionals), values)
     case 'link':
-      return cmdLink(ws, requireOneId(positionals), values, false)
-    case 'unlink':
-      return cmdLink(ws, requireOneId(positionals), values, true)
-    case 'ref':
-      return cmdRef(ws, requireOneId(positionals), values)
-    case 'unref':
-      return cmdUnref(ws, requireOneId(positionals), values)
-    case 'next':
-      return cmdNext(ws, values)
-    case 'claim':
-      return cmdClaim(ws, requireOneId(positionals), values)
+      return cmdLink(ws, requireOneId(positionals), values)
     case 'delete':
       return cmdDelete(ws, requireOneId(positionals))
     default:

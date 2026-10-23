@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { stringify } from 'yaml'
 import { AGENTS_MD } from './agents-md'
@@ -9,19 +10,9 @@ import type { Task } from './types'
 
 const hasKanban = (dir: string) => fs.existsSync(path.join(dir, '.kanban'))
 
-export function findWorkspace(opts: { dir?: string; cwd?: string } = {}): string {
-  const explicit = opts.dir ?? process.env.KB_DIR
-  if (explicit) {
-    const dir = path.resolve(explicit)
-    if (!hasKanban(dir)) throw new KbError('not_found', `no .kanban/ in ${dir}`)
-    return dir
-  }
-  let dir = path.resolve(opts.cwd ?? process.cwd())
-  while (!hasKanban(dir)) {
-    const up = path.dirname(dir)
-    if (up === dir) throw new KbError('not_found', 'no .kanban/ found in this or any parent directory')
-    dir = up
-  }
+export function findWorkspace(opts: { dir?: string } = {}): string {
+  const dir = path.resolve(opts.dir ?? process.env.KB_DIR ?? path.join(os.homedir(), 'Desktop', 'personal', '.kb'))
+  if (!hasKanban(dir)) throw new KbError('not_found', `no .kanban/ in ${dir}`)
   return dir
 }
 

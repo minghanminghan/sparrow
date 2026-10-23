@@ -13,24 +13,31 @@ for the full command, flag, and exit-code reference.
 
 ## The work loop
 
-1. \`kb next --assignee ai\` — get the highest-ranked available task.
-2. \`kb claim <id> --assignee ai\` — claim it (moves it to the active column).
+1. \`kb list --status todo\` — find a task. Tasks are listed by rank.
+2. \`kb update <id> --status in-progress --assignee ai\` — take it.
 3. Do the work.
 4. \`kb comment <id> --body "what you did"\` — leave a note.
 5. \`kb update <id> --status done\` — mark it done.
 
-\`kb next\` returns \`null\` with exit code 0 when nothing is available. A task
-is available when it is in the \`ready\` column, has no unfinished subtasks,
-is not blocked by an unfinished task, and has no assignee (or is already
-assigned to you).
+Skip tasks that have an assignee other than you, are blocked by an
+unfinished task, or have unfinished subtasks.
+
+## Editing a task
+
+- \`kb update <id> --body "..."\` (or \`--body -\` for stdin, \`--body-file <path>\`)
+  replaces the description. Pass \`--body-hash <bodyHash>\` from \`kb show\`
+  to fail with a conflict if someone else changed it first. \`--title-hash\`
+  does the same for \`--title\`.
+- \`kb update <id> --ref <url> [--ref-label <label>]\` adds a reference;
+  add \`--ref-remove\` to remove it.
+- \`kb link <id> --blocks <other>\` or \`--relates <other>\` adds a link;
+  add \`--remove\` to remove it.
 
 ## Breaking work into subtasks
 
 Use \`kb create --title "..." --parent <id>\` to add a subtask under a task.
-A parent with unfinished subtasks is never offered by \`kb next\`, so
-splitting work this way keeps agents from claiming a whole project at
-once. \`kb show <id>\` reports \`progress: { done, total }\` over direct
-children.
+Work on subtasks before their parent. \`kb show <id>\` reports
+\`progress: { done, total }\` over direct children.
 
 ## Exit codes
 
@@ -39,7 +46,7 @@ children.
 | 0 | ok |
 | 1 | usage error |
 | 2 | not found |
-| 3 | conflict (e.g. already claimed by someone else) |
+| 3 | conflict (e.g. a stale \`--title-hash\` or \`--body-hash\`) |
 | 4 | invalid file |
 
 Errors are JSON on stderr: \`{ "error": { "code", "message" } }\`.

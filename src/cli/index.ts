@@ -1,15 +1,14 @@
-import { spawn } from 'node:child_process'
-import fs from 'node:fs'
-import path from 'node:path'
 import { parseArgs } from 'node:util'
-import { EXIT, findWorkspace, KbError } from '../core'
+import { EXIT, KbError } from '../core'
 import type { TaskView } from '../core'
 import { COMMANDS, GLOBAL_FLAGS, runCommand } from './commands'
-import type { CommandDef, CommandResult, FlagDef, Values } from './commands'
+import type { CommandResult, FlagDef, HelpValue, Values } from './commands'
 
-function buildOptions(cmd: CommandDef): Record<string, { type: 'string' | 'boolean' }> {
-  const options: Record<string, { type: 'string' | 'boolean' }> = {}
-  for (const f of [...GLOBAL_FLAGS, ...cmd.flags]) options[f.name] = { type: f.type }
+type ParseOption = { type: 'string' | 'boolean'; short?: string }
+
+function buildOptions(flags: FlagDef[]): Record<string, ParseOption> {
+  const options: Record<string, ParseOption> = {}
+  for (const f of flags) options[f.name] = f.short ? { type: f.type, short: f.short } : { type: f.type }
   return options
 }
 
@@ -17,16 +16,67 @@ function taskLine(t: TaskView): string {
   return `${t.id}  ${t.status}  ${t.due ?? ''}  ${t.title}`
 }
 
-function printHelp(value: { commands: CommandDef[]; globalFlags: FlagDef[]; exitCodes: Record<string, number> }): void {
-  console.log('Commands:')
-  for (const c of value.commands) {
-    console.log(`  ${c.name.padEnd(10)} ${c.summary}`)
-    for (const f of c.flags) console.log(`      --${f.name} <${f.type}>  ${f.desc}`)
+function printTable(rows: string[][]): void {
+  const keep = rows[0].map((_, i) => rows.some((r) => r[i] !== ''))
+  const cols = rows.map((r) => r.filter((_, i) => keep[i]))
+  const widths = cols[0].map((_, i) => Math.max(...cols.map((r) => r[i].length)))
+  for (const r of cols) console.log(r.map((cell, i) => (i === r.length - 1 ? cell : cell.padEnd(widths[i]))).join('  '))
+}
+
+function printTasks(lines: { task: TaskView; depth: number }[], offset: number, total: number): void {
+  if (lines.length === 0) {
+    console.log(`Showing 0 of ${total} tasks`)
+    return
   }
-  console.log('\nGlobal flags:')
-  for (const f of value.globalFlags) console.log(`  --${f.name} <${f.type}>  ${f.desc}`)
-  console.log('\nExit codes:')
-  for (const [code, n] of Object.entries(value.exitCodes)) console.log(`  ${n} ${code}`)
+  printTable(lines.map(({ task, depth }) => ['  '.repeat(depth) + task.id, task.status, task.due ?? '', task.title]))
+  console.log(`\nShowing ${offset + 1}-${offset + lines.length} of ${total} tasks`)
+}
+
+function printDetail(t: TaskView): void {
+  const fields: [string, string | undefined][] = [
+    ['Status', t.status],
+    ['Assignee', t.assignee],
+    ['Due', t.due],
+    ['Parent', t.parent],
+    ['Children', t.children.length ? `${t.children.join(', ')} (${t.progress.done}/${t.progress.total} done)` : undefined],
+    ['Links', t.links.map((l) => `${l.type} ${l.id}`).join(', ') || undefined],
+    ['Backlinks', t.backlinks.map((l) => `${l.type} ${l.id}`).join(', ') || undefined],
+    ['Refs', t.refs.map((r) => (r.label ? `${r.label} <${r.url}>` : r.url)).join(', ') || undefined],
+    ['Created', t.created],
+    ['Updated', t.updated],
+    ['Completed', t.completed],
+  ]
+  console.log(`${t.id}  ${t.title}\n`)
+  printTable(fields.filter(([, v]) => v !== undefined).map(([k, v]) => [`${k}:`, v!]))
+  if (t.body.trim()) console.log(`\n${t.body.trimEnd()}`)
+  if (t.comments.length) {
+    console.log('\nComments:')
+    for (const c of t.comments) console.log(`\n${c.at} · ${c.author}\n${c.body.trimEnd()}`)
+  }
+}
+
+function printOptions(flags: FlagDef[]): void {
+  const left = flags.map((f) => {
+    const long = f.type === 'string' ? `--${f.name} <${f.name.toUpperCase().replace(/-/g, '_')}>` : `--${f.name}`
+    return f.short ? `-${f.short}, ${long}` : `    ${long}`
+  })
+  const width = Math.max(...left.map((l) => l.length))
+  console.log('Options:')
+  flags.forEach((f, i) => console.log(`  ${left[i].padEnd(width)}  ${f.desc}`))
+}
+
+function printHelp(value: HelpValue): void {
+  if (value.command) {
+    const cmd = value.commands[0]
+    console.log(`${cmd.summary}\n\nUsage: kb ${cmd.name} [OPTIONS]${cmd.args ? ` ${cmd.args}` : ''}\n`)
+    printOptions([...cmd.flags, ...value.globalFlags])
+    return
+  }
+  const width = Math.max(...value.commands.map((c) => c.name.length))
+  console.log('Local kanban board CLI\n\nUsage: kb [OPTIONS] <COMMAND>\n\nCommands:')
+  for (const c of value.commands) console.log(`  ${c.name.padEnd(width)}  ${c.summary}`)
+  console.log()
+  printOptions(value.globalFlags)
 }
 
 function printResult(result: CommandResult, jsonMode: boolean): void {
@@ -38,14 +88,11 @@ function printResult(result: CommandResult, jsonMode: boolean): void {
     case 'task':
       console.log(taskLine(result.value))
       return
-    case 'maybeTask':
-      console.log(result.value ? taskLine(result.value) : 'no task available')
+    case 'detail':
+      printDetail(result.value)
       return
     case 'tasks':
-      for (const { task, depth } of result.lines) console.log('  '.repeat(depth) + taskLine(task))
-      return
-    case 'init':
-      console.log(result.value.ws)
+      printTasks(result.lines, result.offset, result.value.total)
       return
     case 'deleted':
       console.log(`${result.value.id} deleted`)
@@ -56,31 +103,12 @@ function printResult(result: CommandResult, jsonMode: boolean): void {
   }
 }
 
-async function runServe(values: Values): Promise<number> {
-  const ws = findWorkspace({ dir: values.dir as string | undefined })
-  const root = path.resolve(__dirname, '..')
-  if (!fs.existsSync(path.join(root, '.next'))) throw new KbError('usage', 'run pnpm build')
-  const port = (values.port as string | undefined) ?? '4600'
-  const bin = path.join(root, 'node_modules', '.bin', 'next')
-  const child = spawn(bin, ['start', '-H', '127.0.0.1', '-p', port], {
-    cwd: root,
-    env: { ...process.env, KB_DIR: ws },
-    stdio: 'inherit',
-  })
-  return new Promise((resolve) => child.on('exit', (code) => resolve(code ?? 0)))
-}
-
 async function main(): Promise<void> {
-  const argv = process.argv.slice(2)
-  const name = argv.length === 0 ? 'help' : argv[0]
-  const cmd = COMMANDS.find((c) => c.name === name)
-  if (!cmd) throw new KbError('usage', `unknown command "${name}"`)
-  const rest = argv.length === 0 ? [] : argv.slice(1)
-
+  const allFlags = [...GLOBAL_FLAGS, ...COMMANDS.flatMap((c) => c.flags)]
   let values: Values
   let positionals: string[]
   try {
-    ;({ values, positionals } = parseArgs({ args: rest, options: buildOptions(cmd), allowPositionals: true }) as {
+    ;({ values, positionals } = parseArgs({ args: process.argv.slice(2), options: buildOptions(allFlags), allowPositionals: true }) as {
       values: Values
       positionals: string[]
     })
@@ -88,12 +116,17 @@ async function main(): Promise<void> {
     throw new KbError('usage', (err as Error).message)
   }
 
-  if (cmd.name === 'serve') {
-    process.exit(await runServe(values))
-  }
+  const name = positionals.shift() ?? 'help'
+  const cmd = COMMANDS.find((c) => c.name === name)
+  if (!cmd) throw new KbError('usage', `unknown command "${name}"`)
+  const allowed = new Set([...GLOBAL_FLAGS, ...cmd.flags].map((f) => f.name))
+  const unknown = Object.keys(values).find((k) => !allowed.has(k))
+  if (unknown) throw new KbError('usage', `unknown option "--${unknown}" for ${cmd.name}`)
+  if (values.help && cmd.name !== 'help') positionals = [cmd.name]
+
 
   const jsonMode = Boolean(values.json) || !process.stdout.isTTY
-  const result = await runCommand(cmd.name, values, positionals)
+  const result = await runCommand(values.help ? 'help' : cmd.name, values, positionals)
   printResult(result, jsonMode)
 }
 

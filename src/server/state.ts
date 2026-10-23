@@ -19,9 +19,7 @@ declare global {
 const DEBOUNCE_MS = 50
 
 function createState(): State {
-  const dir = process.env.KB_DIR
-  if (!dir) throw new KbError('usage', 'KB_DIR is not set')
-  const ws = findWorkspace({ dir })
+  const ws = findWorkspace()
   const emitter = new EventEmitter()
   emitter.setMaxListeners(0)
   const index = buildIndex(ws)
