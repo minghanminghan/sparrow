@@ -69,7 +69,7 @@ export function QuickCreate() {
         refs,
       })
       reset()
-      titleRef.current?.focus()
+      onClose()
     } catch {
       // the store already pushed a toast with the error
     }
