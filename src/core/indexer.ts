@@ -13,7 +13,7 @@ export type TaskView = Task & {
   progress: { done: number; total: number }
 }
 export type InvalidFile = { file: string; error: string }
-export type Index = { config: Config; tasks: TaskView[]; invalid: InvalidFile[] }
+export type Index = { ws: string; config: Config; tasks: TaskView[]; invalid: InvalidFile[] }
 
 const TASK_FILE_RE = /^[A-Za-z]+-\d+\.md$/
 const MENTION_RE = /\[\[([A-Za-z]+-\d+)\]\]/g
@@ -87,7 +87,7 @@ export function buildIndex(ws: string): Index {
 
   views.sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
 
-  return { config, tasks: views, invalid }
+  return { ws, config, tasks: views, invalid }
 }
 
 export function viewTask(index: Index, id: string): TaskView | undefined {

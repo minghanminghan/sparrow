@@ -43,7 +43,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent): void {
-      if (isTypingTarget(e.target)) return
+      if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return
       if (e.key === 'c') {
         e.preventDefault()
         openCreate({})
