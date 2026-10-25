@@ -442,7 +442,10 @@ function Links({ task }: { task: TaskView }) {
                 const source = byId[b.id]
                 return (
                   <li key={`${type}-${b.id}`}>
-                    <button onClick={() => openPanel(b.id)} className="hover:underline">
+                    <button
+                      onClick={() => openPanel(b.id)}
+                      className={`hover:underline ${b.done ? 'text-gray-400 line-through' : ''}`}
+                    >
                       {b.id}
                       {source ? ` — ${source.title}` : ''}
                     </button>

@@ -24,19 +24,15 @@ export function Column({ column }: { column: ColumnConfig }) {
   return (
     <div
       ref={setNodeRef}
+      onDoubleClick={(e) => {
+        if ((e.target as HTMLElement).closest('[data-opens-task]')) return
+        openCreate({ status: column.key })
+      }}
       className={`flex w-72 shrink-0 flex-col rounded-lg lg:w-auto lg:min-w-56 lg:max-w-md lg:flex-1 xl:min-w-64 2xl:max-w-xl ${isOver ? 'bg-gray-100' : 'bg-gray-50'}`}
     >
       <div className="flex items-center justify-between px-3 py-2">
         <h2 className="text-sm font-semibold text-gray-700">{column.name}</h2>
         <span className="text-xs text-gray-400">{ids.length}</span>
-      </div>
-      <div className="px-2">
-        <button
-          onClick={() => openCreate({ status: column.key })}
-          className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-left text-sm text-gray-500 hover:border-gray-400"
-        >
-          + Add task
-        </button>
       </div>
       <SortableContext id={`list:${column.key}`} items={ids} strategy={verticalListSortingStrategy}>
         <div className="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto p-2">

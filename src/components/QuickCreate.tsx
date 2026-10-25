@@ -34,7 +34,6 @@ export function QuickCreate() {
   }, [createFor])
 
   if (!createFor) return null
-  const onClose = () => openCreate(null)
 
   function reset(): void {
     setTitle('')
@@ -45,6 +44,17 @@ export function QuickCreate() {
     setLinks([])
     setRefs([])
     setUrl('')
+  }
+
+  function close(): void {
+    reset()
+    openCreate(null)
+  }
+
+  function onClose(): void {
+    const dirty = title || parent || due || assignee || body || url || links.length || refs.length
+    if (dirty && !window.confirm('Discard this task?')) return
+    close()
   }
 
   async function submit(): Promise<void> {
@@ -68,8 +78,7 @@ export function QuickCreate() {
         links,
         refs,
       })
-      reset()
-      onClose()
+      close()
     } catch {
       // the store already pushed a toast with the error
     }

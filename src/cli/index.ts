@@ -40,7 +40,7 @@ function printDetail(t: TaskView): void {
     ['Parent', t.parent],
     ['Children', t.children.length ? `${t.children.join(', ')} (${t.progress.done}/${t.progress.total} done)` : undefined],
     ['Links', t.links.map((l) => `${l.type} ${l.id}`).join(', ') || undefined],
-    ['Backlinks', t.backlinks.map((l) => `${l.type} ${l.id}`).join(', ') || undefined],
+    ['Backlinks', t.backlinks.map((l) => `${l.type} ${l.id}${l.done ? ' (done)' : ''}`).join(', ') || undefined],
     ['Refs', t.refs.map((r) => (r.label ? `${r.label} <${r.url}>` : r.url)).join(', ') || undefined],
     ['Created', t.created],
     ['Updated', t.updated],

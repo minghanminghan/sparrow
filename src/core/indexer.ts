@@ -4,11 +4,12 @@ import { columnByRole, isDone, loadConfig } from './config'
 import { hash, parseTask } from './format'
 import type { Config, Task } from './types'
 
-export type Backlink = { type: 'blocked-by' | 'relates' | 'mentioned-in'; id: string }
+export type Backlink = { type: 'blocked-by' | 'relates' | 'mentioned-in'; id: string; done?: true }
 export type TaskView = Task & {
   titleHash: string
   bodyHash: string
   backlinks: Backlink[]
+  blocked: boolean
   children: string[]
   progress: { done: number; total: number }
 }
@@ -64,7 +65,12 @@ export function buildIndex(ws: string): Index {
   const children = new Map<string, string[]>()
 
   for (const task of tasksById.values()) {
-    for (const link of task.links) addBacklink(link.id, { type: REVERSE_LINK[link.type], id: task.id })
+    const done = isDone(config, task.status)
+    for (const link of task.links) {
+      const bl: Backlink = { type: REVERSE_LINK[link.type], id: task.id }
+      if (bl.type === 'blocked-by' && done) bl.done = true
+      addBacklink(link.id, bl)
+    }
     for (const mentioned of mentionsIn(task)) addBacklink(mentioned, { type: 'mentioned-in', id: task.id })
     if (task.parent) {
       if (!children.has(task.parent)) children.set(task.parent, [])
@@ -75,11 +81,13 @@ export function buildIndex(ws: string): Index {
   const views: TaskView[] = [...tasksById.values()].map((task) => {
     const kids = children.get(task.id) ?? []
     const done = kids.filter((id) => isDone(config, tasksById.get(id)!.status)).length
+    const bls = backlinks.get(task.id) ?? []
     return {
       ...task,
       titleHash: hash(task.title),
       bodyHash: hash(task.body),
-      backlinks: backlinks.get(task.id) ?? [],
+      backlinks: bls,
+      blocked: bls.some((b) => b.type === 'blocked-by' && !b.done),
       children: kids,
       progress: { done, total: kids.length },
     }
@@ -100,11 +108,6 @@ export function nextTask(index: Index, assignee?: string): TaskView | null {
   const byId = new Map(tasks.map((t) => [t.id, t]))
   const unfinished = (status: string) => !isDone(config, status)
 
-  const isBlocked = (task: TaskView) =>
-    tasks.some(
-      (other) => unfinished(other.status) && other.links.some((l) => l.type === 'blocks' && l.id === task.id),
-    )
-
   const hasUnfinishedSubtask = (task: TaskView) =>
     task.children.some((id) => {
       const child = byId.get(id)
@@ -114,7 +117,7 @@ export function nextTask(index: Index, assignee?: string): TaskView | null {
   const candidates = tasks.filter((t) => {
     if (t.status !== readyKey) return false
     if (hasUnfinishedSubtask(t)) return false
-    if (isBlocked(t)) return false
+    if (t.blocked) return false
     if (assignee === undefined) return t.assignee === undefined
     return t.assignee === undefined || t.assignee === assignee
   })
