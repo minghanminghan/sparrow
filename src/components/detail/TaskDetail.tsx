@@ -596,7 +596,6 @@ function Comments({ task }: { task: TaskView }) {
 export function TaskDetail({ id, fullPage = false }: { id: string; fullPage?: boolean }) {
   const task = useKb((s) => s.byId[id])
   const config = useKb((s) => s.index?.config)
-  const ws = useKb((s) => s.index?.ws)
   const op = useKb((s) => s.op)
   const openPanel = useKb((s) => s.openPanel)
   const remove = useKb((s) => s.remove)
@@ -606,10 +605,10 @@ export function TaskDetail({ id, fullPage = false }: { id: string; fullPage?: bo
   if (!task || !config) {
     return <div className="p-4 text-sm text-gray-500">Loading…</div>
   }
-  const filePath = `${ws}/tasks/${task.id}.md`
+  const showCmd = `sparrow show ${task.id}`
 
-  async function copyPath(): Promise<void> {
-    await navigator.clipboard.writeText(filePath)
+  async function copyCmd(): Promise<void> {
+    await navigator.clipboard.writeText(showCmd)
     setCopied(true)
     setTimeout(() => setCopied(false), 500)
   }
@@ -628,11 +627,11 @@ export function TaskDetail({ id, fullPage = false }: { id: string; fullPage?: bo
         <div className="flex items-baseline gap-2">
           <span className="font-mono text-sm font-medium text-gray-400">{task.id}</span>
           <button
-            onClick={() => void copyPath()}
-            title="Copy path"
+            onClick={() => void copyCmd()}
+            title="Copy command"
             className="min-w-0 flex-1 truncate text-left font-mono text-xs text-gray-400 hover:text-gray-700"
           >
-            {copied ? 'Copied!' : filePath}
+            {copied ? 'Copied!' : showCmd}
           </button>
           <button onClick={() => void handleDelete()} className="text-sm text-red-600 hover:underline">
             Delete

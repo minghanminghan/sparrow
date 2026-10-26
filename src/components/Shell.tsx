@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
-import type { InvalidFile } from '@/core'
 import { useKb } from '@/client/store'
 import { Filters } from './Filters'
 import { QuickCreate } from './QuickCreate'
@@ -13,7 +12,6 @@ import { TaskPanel } from './TaskPanel'
 // Stable reference: a selector returning `?? []` would create a new array
 // each call, which useSyncExternalStore treats as a changed snapshot and
 // re-renders forever.
-const NO_INVALID: InvalidFile[] = []
 
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
@@ -27,7 +25,6 @@ export function Shell({ children }: { children: ReactNode }) {
   const q = useKb((s) => s.filters.q)
   const setFilters = useKb((s) => s.setFilters)
   const openPanel = useKb((s) => s.openPanel)
-  const invalid = useKb((s) => s.index?.invalid ?? NO_INVALID)
   const toasts = useKb((s) => s.toasts)
   const dismissToast = useKb((s) => s.dismissToast)
   const openCreate = useKb((s) => s.openCreate)
@@ -87,13 +84,6 @@ export function Shell({ children }: { children: ReactNode }) {
           + New (c)
         </button>
       </header>
-
-      {invalid.length > 0 && (
-        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          {invalid.length} file{invalid.length === 1 ? '' : 's'} failed to parse:{' '}
-          {invalid.map((f) => f.file).join(', ')}
-        </div>
-      )}
 
       <div className="relative min-h-0 flex-1">
         <main className="h-full overflow-auto">{children}</main>

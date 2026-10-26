@@ -6,14 +6,14 @@ import {
   createTask,
   deleteTask,
   EXIT,
-  findWorkspace,
   isDone,
   KbError,
+  openDb,
   rankBetween,
   readTask,
   viewTask,
 } from '../core'
-import type { LinkType, Op, TaskView } from '../core'
+import type { Db, LinkType, Op, TaskView } from '../core'
 
 export type FlagType = 'string' | 'boolean'
 export type FlagDef = { name: string; short?: string; type: FlagType; desc: string }
@@ -96,7 +96,7 @@ export const COMMANDS: CommandDef[] = [
       { name: 'remove', type: 'boolean', desc: 'remove the link instead of adding it' },
     ],
   },
-  { name: 'delete', summary: 'Move a task to trash', args: '<ID>', flags: [] },
+  { name: 'delete', summary: 'Delete a task (soft delete; the id is never reused)', args: '<ID>', flags: [] },
   { name: 'help', summary: 'Print this message or the help of the given command', args: '[COMMAND]', flags: [] },
 ]
 
@@ -141,8 +141,8 @@ function todayLocal(): string {
   return local.toISOString().slice(0, 10)
 }
 
-async function freshView(ws: string, id: string): Promise<TaskView> {
-  return viewTask(buildIndex(ws), id)!
+function freshView(db: Db, id: string): TaskView {
+  return viewTask(buildIndex(db), id)!
 }
 
 function cmdHelp(positionals: string[]): CommandResult {
@@ -154,14 +154,14 @@ function cmdHelp(positionals: string[]): CommandResult {
   return { kind: 'help', value: { command: name, commands: [cmd], globalFlags: GLOBAL_FLAGS, exitCodes } }
 }
 
-function cmdShow(ws: string, id: string): CommandResult {
-  const view = viewTask(buildIndex(ws), id)
+function cmdShow(db: Db, id: string): CommandResult {
+  const view = viewTask(buildIndex(db), id)
   if (!view) throw new KbError('not_found', `task ${id} not found`)
   return { kind: 'detail', value: view }
 }
 
-function filterTasks(ws: string, values: Values): TaskView[] {
-  const idx = buildIndex(ws)
+function filterTasks(db: Db, values: Values): TaskView[] {
+  const idx = buildIndex(db)
   let tasks = idx.tasks
   if (!values.all) tasks = tasks.filter((t) => !isDone(idx.config, t.status))
   if (values.status !== undefined) tasks = tasks.filter((t) => t.status === values.status)
@@ -197,18 +197,18 @@ function treeLines(tasks: TaskView[]): { task: TaskView; depth: number }[] {
   return out
 }
 
-function cmdList(ws: string, values: Values): CommandResult {
-  const tasks = filterTasks(ws, values)
+function cmdList(db: Db, values: Values): CommandResult {
+  const tasks = filterTasks(db, values)
   const offset = intFlag(values, 'offset', 0)
   const all = values.tree ? treeLines(tasks) : tasks.map((t) => ({ task: t, depth: 0 }))
   const lines = all.slice(offset, offset + intFlag(values, 'limit', 20))
   return { kind: 'tasks', value: { total: all.length, tasks: lines.map((l) => l.task) }, offset, lines }
 }
 
-async function cmdCreate(ws: string, values: Values): Promise<CommandResult> {
+function cmdCreate(db: Db, values: Values): CommandResult {
   const title = values.title as string | undefined
   if (!title) throw new KbError('usage', 'create requires --title')
-  const task = await createTask(ws, {
+  const task = createTask(db, {
     title,
     parent: values.parent as string | undefined,
     status: values.status as string | undefined,
@@ -216,11 +216,11 @@ async function cmdCreate(ws: string, values: Values): Promise<CommandResult> {
     assignee: values.assignee as string | undefined,
     body: readBodyInput(values),
   })
-  return { kind: 'task', value: await freshView(ws, task.id) }
+  return { kind: 'task', value: freshView(db, task.id) }
 }
 
-function neighborRank(ws: string, status: string, selfId: string, beforeId?: string, afterId?: string): string {
-  const siblings = buildIndex(ws).tasks.filter((t) => t.status === status && t.id !== selfId)
+function neighborRank(db: Db, status: string, selfId: string, beforeId?: string, afterId?: string): string {
+  const siblings = buildIndex(db).tasks.filter((t) => t.status === status && t.id !== selfId)
   if (beforeId !== undefined) {
     const i = siblings.findIndex((t) => t.id === beforeId)
     if (i === -1) throw new KbError('not_found', `task ${beforeId} not found in status "${status}"`)
@@ -231,40 +231,40 @@ function neighborRank(ws: string, status: string, selfId: string, beforeId?: str
   return rankBetween(siblings[i].rank, siblings[i + 1]?.rank)
 }
 
-async function cmdUpdate(ws: string, id: string, values: Values): Promise<CommandResult> {
-  let task = readTask(ws, id).task
-  const apply = async (op: Op): Promise<void> => {
-    task = await applyOp(ws, id, op)
+function cmdUpdate(db: Db, id: string, values: Values): CommandResult {
+  let task = readTask(db, id)
+  const apply = (op: Op): void => {
+    task = applyOp(db, id, op)
   }
   if ((values['ref-label'] !== undefined || values['ref-remove']) && values.ref === undefined) {
     throw new KbError('usage', '--ref-label and --ref-remove require --ref')
   }
-  if (values.title !== undefined) await apply({ type: 'setTitle', title: values.title as string, baseHash: values['title-hash'] as string | undefined })
+  if (values.title !== undefined) apply({ type: 'setTitle', title: values.title as string, baseHash: values['title-hash'] as string | undefined })
   const body = readBodyInput(values)
-  if (body !== undefined) await apply({ type: 'setBody', body, baseHash: values['body-hash'] as string | undefined })
-  if (values.status !== undefined) await apply({ type: 'setStatus', status: values.status as string })
-  if (values.due !== undefined) await apply({ type: 'setDue', due: values.due === 'none' ? null : (values.due as string) })
+  if (body !== undefined) apply({ type: 'setBody', body, baseHash: values['body-hash'] as string | undefined })
+  if (values.status !== undefined) apply({ type: 'setStatus', status: values.status as string })
+  if (values.due !== undefined) apply({ type: 'setDue', due: values.due === 'none' ? null : (values.due as string) })
   if (values.assignee !== undefined) {
-    await apply({ type: 'setAssignee', assignee: values.assignee === 'none' ? null : (values.assignee as string) })
+    apply({ type: 'setAssignee', assignee: values.assignee === 'none' ? null : (values.assignee as string) })
   }
-  if (values.parent !== undefined) await apply({ type: 'setParent', parent: values.parent as string })
+  if (values.parent !== undefined) apply({ type: 'setParent', parent: values.parent as string })
   if (values.before !== undefined || values.after !== undefined) {
-    const rank = neighborRank(ws, task.status, id, values.before as string | undefined, values.after as string | undefined)
-    await apply({ type: 'setRank', rank })
+    const rank = neighborRank(db, task.status, id, values.before as string | undefined, values.after as string | undefined)
+    apply({ type: 'setRank', rank })
   }
   if (values.ref !== undefined) {
     const url = values.ref as string
     const label = values['ref-label'] as string | undefined
-    await apply(values['ref-remove'] ? { type: 'removeRef', url } : { type: 'addRef', ref: label ? { url, label } : { url } })
+    apply(values['ref-remove'] ? { type: 'removeRef', url } : { type: 'addRef', ref: label ? { url, label } : { url } })
   }
-  return { kind: 'task', value: await freshView(ws, id) }
+  return { kind: 'task', value: freshView(db, id) }
 }
 
-async function cmdComment(ws: string, id: string, values: Values): Promise<CommandResult> {
+function cmdComment(db: Db, id: string, values: Values): CommandResult {
   const body = requireBody(values, 'comment')
   const author = (values.author as string | undefined) ?? process.env.KB_AUTHOR ?? 'ai'
-  await applyOp(ws, id, { type: 'addComment', author, body })
-  return { kind: 'task', value: await freshView(ws, id) }
+  applyOp(db, id, { type: 'addComment', author, body })
+  return { kind: 'task', value: freshView(db, id) }
 }
 
 function linkTypeAndTarget(values: Values): { type: LinkType; target: string } {
@@ -274,37 +274,37 @@ function linkTypeAndTarget(values: Values): { type: LinkType; target: string } {
   return { type: given[0], target: values[given[0]] as string }
 }
 
-async function cmdLink(ws: string, id: string, values: Values): Promise<CommandResult> {
+function cmdLink(db: Db, id: string, values: Values): CommandResult {
   const { type, target } = linkTypeAndTarget(values)
   const op: Op = values.remove ? { type: 'removeLink', link: { type, id: target } } : { type: 'addLink', link: { type, id: target } }
-  await applyOp(ws, id, op)
-  return { kind: 'task', value: await freshView(ws, id) }
+  applyOp(db, id, op)
+  return { kind: 'task', value: freshView(db, id) }
 }
 
-async function cmdDelete(ws: string, id: string): Promise<CommandResult> {
-  await deleteTask(ws, id)
+function cmdDelete(db: Db, id: string): CommandResult {
+  deleteTask(db, id)
   return { kind: 'deleted', value: { id, deleted: true } }
 }
 
 export async function runCommand(name: string, values: Values, positionals: string[]): Promise<CommandResult> {
   if (name === 'help') return cmdHelp(positionals)
 
-  const ws = findWorkspace()
+  const db = openDb()
   switch (name) {
     case 'list':
-      return cmdList(ws, values)
+      return cmdList(db, values)
     case 'show':
-      return cmdShow(ws, requireOneId(positionals))
+      return cmdShow(db, requireOneId(positionals))
     case 'create':
-      return cmdCreate(ws, values)
+      return cmdCreate(db, values)
     case 'update':
-      return cmdUpdate(ws, requireOneId(positionals), values)
+      return cmdUpdate(db, requireOneId(positionals), values)
     case 'comment':
-      return cmdComment(ws, requireOneId(positionals), values)
+      return cmdComment(db, requireOneId(positionals), values)
     case 'link':
-      return cmdLink(ws, requireOneId(positionals), values)
+      return cmdLink(db, requireOneId(positionals), values)
     case 'delete':
-      return cmdDelete(ws, requireOneId(positionals))
+      return cmdDelete(db, requireOneId(positionals))
     default:
       throw new KbError('usage', `unknown command "${name}"`)
   }

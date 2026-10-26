@@ -1,41 +1,24 @@
 import { EventEmitter } from 'node:events'
-import path from 'node:path'
-import chokidar, { type FSWatcher } from 'chokidar'
-import { buildIndex, findWorkspace, isTaskFile, KbError } from '@/core'
-import type { ErrorCode, Index, TaskView } from '@/core'
+import { buildIndex, KbError, openDb } from '@/core'
+import type { Db, ErrorCode, Index, TaskView } from '@/core'
 
 export type ServerEvent =
   | { type: 'upsert'; task: TaskView }
   | { type: 'remove'; id: string }
   | { type: 'snapshot'; index: Index }
 
-export type State = { ws: string; index: Index; emitter: EventEmitter; watcher: FSWatcher }
+export type State = { db: Db; index: Index; emitter: EventEmitter }
 
 declare global {
   // eslint-disable-next-line no-var
   var __kb: State | undefined
 }
 
-const DEBOUNCE_MS = 50
-
 function createState(): State {
-  const ws = findWorkspace()
+  const db = openDb()
   const emitter = new EventEmitter()
   emitter.setMaxListeners(0)
-  const index = buildIndex(ws)
-  const watcher = chokidar.watch(path.join(ws, 'tasks'), {
-    ignoreInitial: true,
-    ignored: (p, stats) => (stats?.isFile() ?? false) && !isTaskFile(path.basename(p)),
-  })
-  const state: State = { ws, index, emitter, watcher }
-
-  let timer: ReturnType<typeof setTimeout> | undefined
-  watcher.on('all', () => {
-    clearTimeout(timer)
-    timer = setTimeout(() => refresh(state), DEBOUNCE_MS)
-  })
-
-  return state
+  return { db, index: buildIndex(db), emitter }
 }
 
 export function getState(): State {
@@ -45,9 +28,7 @@ export function getState(): State {
 
 // A listener throwing (e.g. an SSE connection enqueueing on a closed
 // controller) must never stop other listeners from being notified, nor
-// propagate out of refresh() — refresh() runs both inside API route
-// try/catch blocks and bare inside the watcher's debounce setTimeout,
-// where an uncaught exception would crash the whole `next start` process.
+// turn a successful write into an error response.
 function safeEmit(emitter: EventEmitter, event: ServerEvent): void {
   for (const listener of emitter.listeners('event')) {
     try {
@@ -59,7 +40,7 @@ function safeEmit(emitter: EventEmitter, event: ServerEvent): void {
 }
 
 export function refresh(state: State): void {
-  const next = buildIndex(state.ws)
+  const next = buildIndex(state.db)
   const oldById = new Map(state.index.tasks.map((t) => [t.id, t]))
   const nextById = new Map(next.tasks.map((t) => [t.id, t]))
 
