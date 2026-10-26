@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # One-time (and safe to re-run) mini PC setup for sparrow. Run as root from a repo checkout:
 #   sudo [PORT=3417] [TS_PORT=8443] [NODE_BIN=/usr/bin/node] deploy/setup.sh
-# Creates the sparrow user and dirs, installs sparrow.service on 127.0.0.1:$PORT, and adds
-# https://<host>:$TS_PORT -> 127.0.0.1:$PORT to the existing tailscale serve config.
+# Creates the sparrow user and dirs, installs sparrow.service on 127.0.0.1:$PORT and the nightly
+# sparrow-backup.timer, and adds https://<host>:$TS_PORT -> 127.0.0.1:$PORT to the existing
+# tailscale serve config.
 set -euo pipefail
 
 UNIT=/etc/systemd/system/sparrow.service
@@ -51,17 +52,21 @@ if [[ -z $pids ]] && ss -Hltn "sport = :$PORT" | grep -q .; then
   die "port $PORT is in use. Pick another: PORT=<port> $0"
 fi
 
-step "systemd: $UNIT"
-rendered=$(sed -e "s|@NODE_BIN@|$NODE_BIN|" -e "s|@PORT@|$PORT|" "$HERE/sparrow.service")
-changed=0
-if [[ ! -f $UNIT ]] || [[ $(cat "$UNIT") != "$rendered" ]]; then
-  printf '%s\n' "$rendered" >"$UNIT"
-  systemctl daemon-reload
-  changed=1
-fi
+step "systemd: sparrow.service sparrow-backup.service sparrow-backup.timer"
+changed=()
+for unit in sparrow.service sparrow-backup.service sparrow-backup.timer; do
+  rendered=$(sed -e "s|@NODE_BIN@|$NODE_BIN|" -e "s|@PORT@|$PORT|" "$HERE/$unit")
+  dest=/etc/systemd/system/$unit
+  if [[ ! -f $dest ]] || [[ $(cat "$dest") != "$rendered" ]]; then
+    printf '%s\n' "$rendered" >"$dest"
+    changed+=("$unit")
+  fi
+done
+[[ ${#changed[@]} -eq 0 ]] || systemctl daemon-reload
 systemctl enable sparrow >/dev/null
+systemctl enable --now sparrow-backup.timer >/dev/null
 if [[ -e $OPT/current/package.json ]]; then
-  if [[ $changed -eq 1 ]] || ! systemctl is-active --quiet sparrow; then systemctl restart sparrow; fi
+  if [[ " ${changed[*]} " == *" sparrow.service "* ]] || ! systemctl is-active --quiet sparrow; then systemctl restart sparrow; fi
   systemctl is-active --quiet sparrow || echo "warning: sparrow did not start; see journalctl -u sparrow" >&2
 else
   echo "    $OPT/current does not exist yet; the service starts after the first deploy"
@@ -104,6 +109,9 @@ Move your laptop data (one time):
            sudo rm -f $DATA/sparrow.db-wal $DATA/sparrow.db-shm
            sudo install -o sparrow -g sparrow -m 0640 /tmp/sparrow.db $DATA/sparrow.db
            sudo systemctl start sparrow
+
+Backups run nightly (sparrow-backup.timer) into $BACKUPS. Run one now:
+  sudo systemctl start sparrow-backup && journalctl -u sparrow-backup -n 5
 
 Then point the CLI and browser at $URL.
 EOF

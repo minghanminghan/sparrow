@@ -1,0 +1,28 @@
+# Template: deploy/setup.sh fills in @NODE_BIN@ and installs it to /etc/systemd/system.
+# Started nightly by sparrow-backup.timer. Run now: sudo systemctl start sparrow-backup
+[Unit]
+Description=sparrow nightly DB backup and cleanup
+ConditionPathExists=/opt/sparrow/current/dist/backup.js
+
+[Service]
+Type=oneshot
+User=sparrow
+Group=sparrow
+WorkingDirectory=/opt/sparrow/current
+Environment=SPARROW_DB=/var/lib/sparrow/sparrow.db
+Environment=SPARROW_ATTACHMENTS=/var/lib/sparrow/attachments
+Environment=SPARROW_BACKUPS=/var/backups/sparrow
+ExecStart=@NODE_BIN@ dist/backup.js
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+PrivateNetwork=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/sparrow /var/backups/sparrow
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=

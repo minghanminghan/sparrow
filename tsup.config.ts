@@ -2,7 +2,7 @@ import { defineConfig } from "tsup";
 import pkg from "./package.json" with { type: "json" };
 
 export default defineConfig({
-  entry: { cli: "src/cli/index.ts", import: "src/cli/import.ts", migrate: "src/cli/migrate.ts" },
+  entry: { cli: "src/cli/index.ts", import: "src/cli/import.ts", migrate: "src/cli/migrate.ts", backup: "src/cli/backup.ts" },
   format: "cjs",
   target: "node22",
   removeNodeProtocol: false,
