@@ -35,7 +35,7 @@ export function Column({ column }: { column: ColumnConfig }) {
         <span className="text-xs text-gray-400">{ids.length}</span>
       </div>
       <SortableContext id={`list:${column.key}`} items={ids} strategy={verticalListSortingStrategy}>
-        <div className="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto p-2">
+        <div className="flex min-h-16 flex-1 flex-col gap-2 p-2">
           {ids.map((id) => (
             <Card key={id} taskId={id} />
           ))}

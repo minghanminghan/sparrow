@@ -103,7 +103,7 @@ export function Board() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex h-full justify-center-safe gap-4 overflow-x-auto p-4">
+      <div className="flex min-h-full justify-center-safe gap-4 overflow-x-auto p-4">
         {columns.map((col) => (
           <Column key={col.key} column={col} />
         ))}
