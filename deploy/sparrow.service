@@ -1,0 +1,25 @@
+# Template: deploy/setup.sh fills in @NODE_BIN@ and @PORT@ and installs it to /etc/systemd/system.
+[Unit]
+Description=sparrow kanban (next start)
+After=network.target
+ConditionPathExists=/opt/sparrow/current/package.json
+
+[Service]
+User=sparrow
+Group=sparrow
+WorkingDirectory=/opt/sparrow/current
+Environment=NODE_ENV=production
+Environment=PORT=@PORT@
+Environment=SPARROW_DB=/var/lib/sparrow/sparrow.db
+Environment=SPARROW_ATTACHMENTS=/var/lib/sparrow/attachments
+ExecStart=@NODE_BIN@ node_modules/next/dist/bin/next start -H 127.0.0.1 -p ${PORT}
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/sparrow
+
+[Install]
+WantedBy=multi-user.target
