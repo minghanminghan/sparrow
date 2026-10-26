@@ -1,7 +1,7 @@
-import fs from 'node:fs'
-import path from 'node:path'
 import { columnByRole, isDone, loadConfig } from './config'
-import { hash, parseTask } from './format'
+import type { Db } from './db'
+import { hash } from './format'
+import { loadTasks } from './store'
 import type { Config, Task } from './types'
 
 export type Backlink = { type: 'blocked-by' | 'relates' | 'mentioned-in'; id: string; done?: true }
@@ -13,15 +13,9 @@ export type TaskView = Task & {
   children: string[]
   progress: { done: number; total: number }
 }
-export type InvalidFile = { file: string; error: string }
-export type Index = { ws: string; config: Config; tasks: TaskView[]; invalid: InvalidFile[] }
+export type Index = { config: Config; tasks: TaskView[] }
 
-const TASK_FILE_RE = /^\d+\.md$/
 const MENTION_RE = /\[\[(\d+)\]\]/g
-
-export function isTaskFile(name: string): boolean {
-  return TASK_FILE_RE.test(name)
-}
 
 const REVERSE_LINK: Record<Task['links'][number]['type'], Backlink['type']> = {
   blocks: 'blocked-by',
@@ -35,26 +29,9 @@ function mentionsIn(task: Task): string[] {
   return [...ids]
 }
 
-export function buildIndex(ws: string): Index {
-  const config = loadConfig(ws)
-  const dir = path.join(ws, 'tasks')
-  const tasksById = new Map<string, Task>()
-  const invalid: InvalidFile[] = []
-
-  for (const name of fs.readdirSync(dir)) {
-    if (!isTaskFile(name)) continue
-    try {
-      const task = parseTask(fs.readFileSync(path.join(dir, name), 'utf8'))
-      const stem = name.slice(0, -'.md'.length)
-      if (task.id !== stem) {
-        invalid.push({ file: name, error: `id "${task.id}" does not match file name ${name}` })
-        continue
-      }
-      tasksById.set(task.id, task)
-    } catch (err) {
-      invalid.push({ file: name, error: (err as Error).message })
-    }
-  }
+export function buildIndex(db: Db): Index {
+  const config = loadConfig(db)
+  const tasksById = new Map<string, Task>(loadTasks(db).map((t) => [t.id, t]))
 
   const backlinks = new Map<string, Backlink[]>()
   const addBacklink = (id: string, bl: Backlink) => {
@@ -95,7 +72,7 @@ export function buildIndex(ws: string): Index {
 
   views.sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
 
-  return { ws, config, tasks: views, invalid }
+  return { config, tasks: views }
 }
 
 export function viewTask(index: Index, id: string): TaskView | undefined {

@@ -1,13 +1,11 @@
-import { randomBytes } from 'node:crypto'
-import fs from 'node:fs'
-import path from 'node:path'
 import { generateKeyBetween } from 'fractional-indexing'
 import { columnByRole, isDone, loadConfig } from './config'
+import { tx } from './db'
+import type { Db } from './db'
 import { KbError } from './errors'
-import { hash, parseTask, serializeTask } from './format'
+import { hash } from './format'
+import { loadTasks, saveTask } from './store'
 import type { Config, Link, Ref, Task } from './types'
-import { readTask, taskPath } from './workspace'
-import { atomicWrite, withLock } from './write'
 
 export type Op =
   | { type: 'setStatus'; status: string }
@@ -39,10 +37,13 @@ export type CreateInput = {
 
 const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 
-function requireExists(ws: string, id: string): string {
-  const file = taskPath(ws, id)
-  if (!fs.existsSync(file)) throw new KbError('not_found', `task ${id} not found`)
-  return file
+const ID_RE = /^\d+$/
+
+export function readTask(db: Db, id: string): Task {
+  if (!ID_RE.test(id)) throw new KbError('usage', `invalid task id "${id}"`)
+  const task = loadTasks(db, id)[0]
+  if (!task) throw new KbError('not_found', `task ${id} not found`)
+  return task
 }
 
 function setStatus(config: Config, task: Task, status: string, at: string): void {
@@ -57,21 +58,19 @@ function checkHash(field: string, current: string, baseHash?: string): void {
   }
 }
 
-function checkParent(ws: string, id: string, parent: string): void {
-  requireExists(ws, parent)
+function checkParent(db: Db, id: string, parent: string): void {
+  readTask(db, parent)
+  const parentOf = db.prepare('SELECT parent FROM tasks WHERE id = ? AND deleted_at IS NULL')
   const seen = new Set<string>()
   for (let cur: string | undefined = parent; cur && !seen.has(cur); ) {
     if (cur === id) throw new KbError('usage', `setting parent ${parent} on ${id} would create a cycle`)
     seen.add(cur)
-    try {
-      cur = readTask(ws, cur).task.parent
-    } catch {
-      cur = undefined
-    }
+    const row = parentOf.get(cur) as { parent: number | null } | undefined
+    cur = row?.parent == null ? undefined : String(row.parent)
   }
 }
 
-function apply(ws: string, config: Config, task: Task, op: Op, at: string): void {
+function apply(db: Db, config: Config, task: Task, op: Op, at: string): void {
   switch (op.type) {
     case 'setStatus':
       return setStatus(config, task, op.status, at)
@@ -85,7 +84,7 @@ function apply(ws: string, config: Config, task: Task, op: Op, at: string): void
       task.assignee = op.assignee ?? undefined
       return
     case 'setParent':
-      if (op.parent) checkParent(ws, task.id, op.parent)
+      if (op.parent) checkParent(db, task.id, op.parent)
       task.parent = op.parent ?? undefined
       return
     case 'setTitle':
@@ -125,50 +124,26 @@ function apply(ws: string, config: Config, task: Task, op: Op, at: string): void
   }
 }
 
-export async function applyOp(ws: string, id: string, op: Op): Promise<Task> {
-  const config = loadConfig(ws)
-  const file = requireExists(ws, id)
-  return withLock(file, () => {
-    const { task, text } = readTask(ws, id)
+export function applyOp(db: Db, id: string, op: Op): Task {
+  const config = loadConfig(db)
+  return tx(db, () => {
+    const task = readTask(db, id)
     const at = now()
-    apply(ws, config, task, op, at)
+    apply(db, config, task, op, at)
     task.updated = at
-    atomicWrite(file, serializeTask(task, text))
+    saveTask(db, task)
     return task
   })
 }
 
-function lastRank(ws: string, status: string): string | null {
-  let max: string | null = null
-  for (const name of fs.readdirSync(path.join(ws, 'tasks'))) {
-    if (!name.endsWith('.md')) continue
-    try {
-      const t = parseTask(fs.readFileSync(path.join(ws, 'tasks', name), 'utf8'))
-      if (t.status === status && (max === null || t.rank > max)) max = t.rank
-    } catch {}
-  }
-  return max
-}
-
-function nextId(ws: string): string {
-  let max = 0
-  for (const dir of [path.join(ws, 'tasks'), path.join(ws, '.kanban', 'trash')]) {
-    for (const name of fs.readdirSync(dir)) {
-      const m = /^(\d+)\.md$/.exec(name)
-      if (m) max = Math.max(max, Number(m[1]))
-    }
-  }
-  return String(max + 1)
-}
-
-export async function createTask(ws: string, input: CreateInput): Promise<Task> {
-  const config = loadConfig(ws)
-  return withLock(path.join(ws, '.kanban', 'config.yaml'), () => {
-    if (input.parent) requireExists(ws, input.parent)
+export function createTask(db: Db, input: CreateInput): Task {
+  const config = loadConfig(db)
+  return tx(db, () => {
+    if (input.parent) readTask(db, input.parent)
     const status = input.status ?? columnByRole(config, 'ready').key
     const at = now()
     const task: Task = {
-      id: nextId(ws),
+      id: '',
       title: input.title,
       status,
       rank: '',
@@ -184,23 +159,16 @@ export async function createTask(ws: string, input: CreateInput): Promise<Task> 
       extra: {},
     }
     setStatus(config, task, status, at)
-    task.rank = input.rank ?? generateKeyBetween(lastRank(ws, status), null)
-    const target = taskPath(ws, task.id)
-    const tmp = path.join(ws, 'tasks', `.${task.id}.md.tmp-${randomBytes(6).toString('hex')}`)
-    fs.writeFileSync(tmp, serializeTask(task))
-    try {
-      fs.linkSync(tmp, target)
-    } finally {
-      fs.rmSync(tmp, { force: true })
-    }
+    const last = db.prepare('SELECT MAX(rank) AS r FROM tasks WHERE status = ? AND deleted_at IS NULL').get(status) as { r: string | null }
+    task.rank = input.rank ?? generateKeyBetween(last.r, null)
+    task.id = saveTask(db, task)
     return task
   })
 }
 
-export async function deleteTask(ws: string, id: string): Promise<void> {
-  const file = requireExists(ws, id)
-  await withLock(file, () => {
-    requireExists(ws, id)
-    fs.renameSync(file, path.join(ws, '.kanban', 'trash', `${id}.md`))
+export function deleteTask(db: Db, id: string): void {
+  tx(db, () => {
+    readTask(db, id)
+    db.prepare('UPDATE tasks SET deleted_at = ? WHERE id = ?').run(now(), id)
   })
 }

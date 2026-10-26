@@ -18,7 +18,7 @@ export async function POST(req: Request): Promise<Response> {
   try {
     const state = getState()
     const input = (await req.json()) as CreateInput
-    const task = await createTask(state.ws, input)
+    const task = createTask(state.db, input)
     refresh(state)
     return Response.json(viewTask(state.index, task.id))
   } catch (err) {
