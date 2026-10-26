@@ -1,0 +1,55 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  # Tags + GitHub release only; never pushes commits (main is protected).
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - id: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pnpm exec semantic-release
+          tag=$(git tag --points-at HEAD --list 'v*' | head -n1)
+          if [ -n "$tag" ]; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # deploy (task 15): self-hosted runner, gated on the release outputs.
+  #   needs: release
+  #   if: needs.release.outputs.released == 'true'
+  #   env: VERSION: ${{ needs.release.outputs.version }}
+  #   Checkout ref v$VERSION. package.json stays 0.1.0 in git, so run
+  #   `pnpm pkg set version=$VERSION` before `pnpm build`.
