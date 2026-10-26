@@ -1,10 +1,10 @@
 {
-  "name": "kb",
+  "name": "sparrow",
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@11.11.0",
   "bin": {
-    "kb": "dist/cli.js"
+    "sparrow": "dist/cli.js"
   },
   "scripts": {
     "dev": "next dev",

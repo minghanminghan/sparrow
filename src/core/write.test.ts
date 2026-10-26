@@ -21,8 +21,8 @@ test('parallel comments are all kept', async () => {
 test('parallel creates get unique ids, deleted ids not reused', async () => {
   const ts = await Promise.all(Array.from({ length: 10 }, () => createTask(ws, { title: 'x' })))
   expect(new Set(ts.map((t) => t.id)).size).toBe(10)
-  await deleteTask(ws, 'KB-10')
-  expect((await createTask(ws, { title: 'y' })).id).toBe('KB-11')
+  await deleteTask(ws, '10')
+  expect((await createTask(ws, { title: 'y' })).id).toBe('11')
 })
 
 test('stale body hash conflicts, other ops do not', async () => {
@@ -40,9 +40,9 @@ test('parent cycle rejected', async () => {
 })
 
 test('invalid file is never rewritten', async () => {
-  writeFileSync(taskPath(ws, 'KB-9'), 'garbage')
-  await expect(applyOp(ws, 'KB-9', { type: 'setStatus', status: 'done' })).rejects.toMatchObject({ code: 'invalid' })
-  expect(readFileSync(taskPath(ws, 'KB-9'), 'utf8')).toBe('garbage')
+  writeFileSync(taskPath(ws, '9'), 'garbage')
+  await expect(applyOp(ws, '9', { type: 'setStatus', status: 'done' })).rejects.toMatchObject({ code: 'invalid' })
+  expect(readFileSync(taskPath(ws, '9'), 'utf8')).toBe('garbage')
 })
 
 test('done sets and clears completed', async () => {

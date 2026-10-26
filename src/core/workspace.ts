@@ -16,16 +16,16 @@ export function findWorkspace(opts: { dir?: string } = {}): string {
   return dir
 }
 
-export function initWorkspace(dir: string, prefix = 'KB'): void {
+export function initWorkspace(dir: string): void {
   fs.mkdirSync(path.join(dir, '.kanban', 'trash'), { recursive: true })
   fs.mkdirSync(path.join(dir, 'tasks'), { recursive: true })
   const config = path.join(dir, '.kanban', 'config.yaml')
-  if (!fs.existsSync(config)) fs.writeFileSync(config, stringify({ ...DEFAULT_CONFIG, idPrefix: prefix }))
+  if (!fs.existsSync(config)) fs.writeFileSync(config, stringify(DEFAULT_CONFIG))
   const agents = path.join(dir, 'AGENTS.md')
   if (!fs.existsSync(agents)) fs.writeFileSync(agents, AGENTS_MD)
 }
 
-const ID_RE = /^[A-Za-z]+-\d+$/
+const ID_RE = /^\d+$/
 
 export function taskPath(ws: string, id: string): string {
   if (!ID_RE.test(id)) throw new KbError('usage', `invalid task id "${id}"`)

@@ -63,6 +63,8 @@ function parseComments(text: string): Comment[] {
   })
 }
 
+const idStr = (v: unknown) => (typeof v === 'number' ? String(v) : v)
+
 export function parseTask(text: string): Task {
   const { fmText, tail } = splitFrontmatter(text)
   let data: Record<string, unknown>
@@ -71,14 +73,15 @@ export function parseTask(text: string): Task {
   } catch (err) {
     throw new KbError('invalid', `invalid frontmatter yaml: ${(err as Error).message}`)
   }
+  for (const key of ['id', 'parent']) if (key in data) data[key] = idStr(data[key])
   for (const key of ['id', 'title', 'status', 'rank']) {
     if (typeof data[key] !== 'string') throw new KbError('invalid', `missing or invalid "${key}"`)
   }
 
   const links: Link[] = Array.isArray(data.links)
-    ? (data.links as Array<Record<string, string>>).map((m) => {
+    ? (data.links as Array<Record<string, string | number>>).map((m) => {
         const [type, id] = Object.entries(m)[0]
-        return { type: type as Link['type'], id }
+        return { type: type as Link['type'], id: String(id) }
       })
     : []
   const refs: Ref[] = Array.isArray(data.refs)
@@ -126,12 +129,12 @@ export function parseTask(text: string): Task {
 }
 
 function buildFrontmatterObject(t: Task): Record<string, unknown> {
-  const obj: Record<string, unknown> = { id: t.id, title: t.title, status: t.status }
-  if (t.parent) obj.parent = t.parent
+  const obj: Record<string, unknown> = { id: Number(t.id), title: t.title, status: t.status }
+  if (t.parent) obj.parent = Number(t.parent)
   if (t.due) obj.due = t.due
   obj.rank = t.rank
   if (t.assignee) obj.assignee = t.assignee
-  if (t.links.length) obj.links = t.links.map((l) => ({ [l.type]: l.id }))
+  if (t.links.length) obj.links = t.links.map((l) => ({ [l.type]: Number(l.id) }))
   if (t.refs.length) {
     obj.refs = t.refs.map((r) => (r.label ? { url: r.url, label: r.label } : { url: r.url }))
   }

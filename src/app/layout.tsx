@@ -3,7 +3,7 @@ import "./globals.css";
 import { Shell } from "@/components/Shell";
 
 export const metadata: Metadata = {
-  title: "kb",
+  title: "sparrow",
   description: "A local file-based kanban board",
 };
 

@@ -5,7 +5,7 @@ import { parseTask, serializeTask } from './format'
 
 function fixture(opts: { extra?: string; body?: string; comments?: string } = {}): string {
   const fm = {
-    id: 'KB-1',
+    id: 1,
     title: 'Test task',
     status: 'todo',
     rank: 'a0',
@@ -36,6 +36,6 @@ describe('format', () => {
   })
 
   test('missing title throws invalid', () => {
-    expect(() => parseTask('---\nid: KB-1\nstatus: todo\nrank: a0\n---\n')).toThrow(KbError)
+    expect(() => parseTask('---\nid: 1\nstatus: todo\nrank: a0\n---\n')).toThrow(KbError)
   })
 })

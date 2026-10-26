@@ -1,6 +1,6 @@
 export type Role = 'ready' | 'active' | 'done'
 export type Column = { key: string; name: string; role?: Role }
-export type Config = { idPrefix: string; user: string; columns: Column[] }
+export type Config = { user: string; columns: Column[] }
 export type LinkType = 'blocks' | 'relates'
 export type Link = { type: LinkType; id: string }
 export type Ref = { url: string; label?: string }

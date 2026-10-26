@@ -53,7 +53,7 @@ function safeEmit(emitter: EventEmitter, event: ServerEvent): void {
     try {
       ;(listener as (e: ServerEvent) => void)(event)
     } catch (err) {
-      console.error('kb: event listener failed', err)
+      console.error('sparrow: event listener failed', err)
     }
   }
 }

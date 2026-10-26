@@ -109,8 +109,6 @@ export type CommandResult =
 
 export type HelpValue = { command?: string; commands: CommandDef[]; globalFlags: FlagDef[]; exitCodes: Record<string, number> }
 
-const ID_FLAGS = ['parent', 'before', 'after', 'blocks', 'relates']
-
 function requireOneId(positionals: string[]): string {
   if (positionals.length !== 1) throw new KbError('usage', 'expected exactly one task id')
   return positionals[0]
@@ -292,10 +290,6 @@ export async function runCommand(name: string, values: Values, positionals: stri
   if (name === 'help') return cmdHelp(positionals)
 
   const ws = findWorkspace()
-  const ids = buildIndex(ws).tasks.map((t) => t.id)
-  const resolve = (id: string) => ids.find((t) => t.toLowerCase() === id.toLowerCase()) ?? id
-  for (const k of ID_FLAGS) if (typeof values[k] === 'string') values[k] = resolve(values[k] as string)
-  positionals = positionals.map(resolve)
   switch (name) {
     case 'list':
       return cmdList(ws, values)

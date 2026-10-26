@@ -34,6 +34,7 @@ function printTasks(lines: { task: TaskView; depth: number }[], offset: number, 
 
 function printDetail(t: TaskView): void {
   const fields: [string, string | undefined][] = [
+    ['Title', t.title],
     ['Status', t.status],
     ['Assignee', t.assignee],
     ['Due', t.due],
@@ -46,12 +47,14 @@ function printDetail(t: TaskView): void {
     ['Updated', t.updated],
     ['Completed', t.completed],
   ]
-  console.log(`${t.id}  ${t.title}\n`)
   printTable(fields.filter(([, v]) => v !== undefined).map(([k, v]) => [`${k}:`, v!]))
-  if (t.body.trim()) console.log(`\n${t.body.trimEnd()}`)
+  if (t.body.trim()) console.log(`Body:\n${t.body.trimEnd()}`)
   if (t.comments.length) {
+    const comments = [...t.comments].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
+    const width = Math.max(...comments.map((c) => c.author.length + 1))
+    const prefixes = comments.map((c) => `${c.at}  ${`${c.author}:`.padEnd(width)} `)
     console.log('\nComments:')
-    for (const c of t.comments) console.log(`\n${c.at} · ${c.author}\n${c.body.trimEnd()}`)
+    comments.forEach((c, i) => console.log(prefixes[i] + c.body.trimEnd().split('\n').join('\n' + ' '.repeat(prefixes[i].length))))
   }
 }
 
@@ -68,12 +71,12 @@ function printOptions(flags: FlagDef[]): void {
 function printHelp(value: HelpValue): void {
   if (value.command) {
     const cmd = value.commands[0]
-    console.log(`${cmd.summary}\n\nUsage: kb ${cmd.name} [OPTIONS]${cmd.args ? ` ${cmd.args}` : ''}\n`)
+    console.log(`${cmd.summary}\n\nUsage: sparrow ${cmd.name} [OPTIONS]${cmd.args ? ` ${cmd.args}` : ''}\n`)
     printOptions([...cmd.flags, ...value.globalFlags])
     return
   }
   const width = Math.max(...value.commands.map((c) => c.name.length))
-  console.log('Local kanban board CLI\n\nUsage: kb [OPTIONS] <COMMAND>\n\nCommands:')
+  console.log('sparrow: local kanban board CLI\n\nUsage: sparrow [OPTIONS] <COMMAND>\n\nCommands:')
   for (const c of value.commands) console.log(`  ${c.name.padEnd(width)}  ${c.summary}`)
   console.log()
   printOptions(value.globalFlags)

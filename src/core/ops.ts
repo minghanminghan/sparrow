@@ -150,16 +150,15 @@ function lastRank(ws: string, status: string): string | null {
   return max
 }
 
-function nextId(ws: string, prefix: string): string {
-  const re = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)\\.md$`)
+function nextId(ws: string): string {
   let max = 0
   for (const dir of [path.join(ws, 'tasks'), path.join(ws, '.kanban', 'trash')]) {
     for (const name of fs.readdirSync(dir)) {
-      const m = re.exec(name)
+      const m = /^(\d+)\.md$/.exec(name)
       if (m) max = Math.max(max, Number(m[1]))
     }
   }
-  return `${prefix}-${max + 1}`
+  return String(max + 1)
 }
 
 export async function createTask(ws: string, input: CreateInput): Promise<Task> {
@@ -169,7 +168,7 @@ export async function createTask(ws: string, input: CreateInput): Promise<Task> 
     const status = input.status ?? columnByRole(config, 'ready').key
     const at = now()
     const task: Task = {
-      id: nextId(ws, config.idPrefix),
+      id: nextId(ws),
       title: input.title,
       status,
       rank: '',

@@ -6,7 +6,7 @@ import rehypeSanitize from 'rehype-sanitize'
 import rehypeHighlight from 'rehype-highlight'
 import { useKb } from '@/client/store'
 
-const MENTION_RE = /\[\[([A-Za-z]+-\d+)\]\]/g
+const MENTION_RE = /\[\[(\d+)\]\]/g
 
 function rewriteMentions(src: string): string {
   return src.replace(MENTION_RE, (_match, id: string) => `[${id}](#task:${id})`)

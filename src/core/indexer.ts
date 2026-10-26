@@ -16,8 +16,8 @@ export type TaskView = Task & {
 export type InvalidFile = { file: string; error: string }
 export type Index = { ws: string; config: Config; tasks: TaskView[]; invalid: InvalidFile[] }
 
-const TASK_FILE_RE = /^[A-Za-z]+-\d+\.md$/
-const MENTION_RE = /\[\[([A-Za-z]+-\d+)\]\]/g
+const TASK_FILE_RE = /^\d+\.md$/
+const MENTION_RE = /\[\[(\d+)\]\]/g
 
 export function isTaskFile(name: string): boolean {
   return TASK_FILE_RE.test(name)

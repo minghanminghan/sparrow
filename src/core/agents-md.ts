@@ -1,42 +1,42 @@
 export const AGENTS_MD = `# AGENTS.md
 
-This workspace is a \`kb\` kanban board. Tasks live in \`tasks/*.md\`: YAML
+This workspace is a \`sparrow\` kanban board. Tasks live in \`tasks/*.md\`: YAML
 frontmatter (id, title, status, rank, parent, due, assignee, links, refs,
 created, updated, completed) followed by a Markdown body and an optional
 \`## Comments\` section with \`### <ISO timestamp> · <author>\` headers.
 
-## Rule: change tasks through \`kb\`
+## Rule: change tasks through \`sparrow\`
 
-Never hand-edit files in \`tasks/\`. Always go through the \`kb\` CLI so ranks,
-timestamps, hashes, and locking stay correct. Run \`kb help --json\` any time
+Never hand-edit files in \`tasks/\`. Always go through the \`sparrow\` CLI so ranks,
+timestamps, hashes, and locking stay correct. Run \`sparrow help --json\` any time
 for the full command, flag, and exit-code reference.
 
 ## The work loop
 
-1. \`kb list --status todo\` — find a task. Tasks are listed by rank.
-2. \`kb update <id> --status in-progress --assignee ai\` — take it.
+1. \`sparrow list --status todo\` — find a task. Tasks are listed by rank.
+2. \`sparrow update <id> --status in-progress --assignee ai\` — take it.
 3. Do the work.
-4. \`kb comment <id> --body "what you did"\` — leave a note.
-5. \`kb update <id> --status done\` — mark it done.
+4. \`sparrow comment <id> --body "what you did"\` — leave a note.
+5. \`sparrow update <id> --status done\` — mark it done.
 
 Skip tasks that have an assignee other than you, are blocked by an
 unfinished task, or have unfinished subtasks.
 
 ## Editing a task
 
-- \`kb update <id> --body "..."\` (or \`--body -\` for stdin, \`--body-file <path>\`)
-  replaces the description. Pass \`--body-hash <bodyHash>\` from \`kb show\`
+- \`sparrow update <id> --body "..."\` (or \`--body -\` for stdin, \`--body-file <path>\`)
+  replaces the description. Pass \`--body-hash <bodyHash>\` from \`sparrow show\`
   to fail with a conflict if someone else changed it first. \`--title-hash\`
   does the same for \`--title\`.
-- \`kb update <id> --ref <url> [--ref-label <label>]\` adds a reference;
+- \`sparrow update <id> --ref <url> [--ref-label <label>]\` adds a reference;
   add \`--ref-remove\` to remove it.
-- \`kb link <id> --blocks <other>\` or \`--relates <other>\` adds a link;
+- \`sparrow link <id> --blocks <other>\` or \`--relates <other>\` adds a link;
   add \`--remove\` to remove it.
 
 ## Breaking work into subtasks
 
-Use \`kb create --title "..." --parent <id>\` to add a subtask under a task.
-Work on subtasks before their parent. \`kb show <id>\` reports
+Use \`sparrow create --title "..." --parent <id>\` to add a subtask under a task.
+Work on subtasks before their parent. \`sparrow show <id>\` reports
 \`progress: { done, total }\` over direct children.
 
 ## Exit codes
@@ -60,6 +60,6 @@ change.
 
 ## Learning the tool
 
-Run \`kb help --json\` for every command, its flags, and the exit codes
+Run \`sparrow help --json\` for every command, its flags, and the exit codes
 above — no other docs are required.
 `

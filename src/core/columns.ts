@@ -2,7 +2,6 @@ import { KbError } from './errors'
 import type { Column, Config, Role } from './types'
 
 export const DEFAULT_CONFIG: Config = {
-  idPrefix: 'KB',
   user: 'andrew',
   columns: [
     { key: 'backlog', name: 'Backlog' },
