@@ -79,12 +79,15 @@ export function getAttachment(db: Db, taskId: string, attId: string, dir = attac
   return { ...att, file: path.join(dir, att.id) }
 }
 
-// Deletes the row only; the file stays on disk for the cleanup job.
-export function removeAttachment(db: Db, taskId: string, attId: string): void {
+// Deletes the row only; the file stays on disk for the cleanup job. Touching the file restarts
+// its 7-day clock, so backups taken before the removal can still be restored.
+export function removeAttachment(db: Db, taskId: string, attId: string, dir = attachmentsDir()): void {
   tx(db, () => {
     readTask(db, taskId)
     const res = db.prepare('DELETE FROM attachments WHERE id = ? AND task_id = ?').run(attId, taskId)
     if (res.changes === 0) throw new KbError('not_found', `attachment ${attId} not found on task ${taskId}`)
     db.prepare('UPDATE tasks SET updated = ? WHERE id = ?').run(now(), taskId)
   })
+  const file = path.join(dir, attId)
+  if (fs.existsSync(file)) fs.utimesSync(file, new Date(), new Date())
 }

@@ -11,5 +11,9 @@ const common = {
 export default defineConfig([
   // The CLI is served as a single file by /cli/sparrow.js, so it bundles its dependencies.
   { ...common, entry: { cli: "src/cli/index.ts" }, noExternal: [/.*/] },
-  { ...common, entry: { import: "src/cli/import.ts", migrate: "src/cli/migrate.ts" }, external: Object.keys(pkg.dependencies ?? {}) },
+  {
+    ...common,
+    entry: { import: "src/cli/import.ts", migrate: "src/cli/migrate.ts", backup: "src/cli/backup.ts" },
+    external: Object.keys(pkg.dependencies ?? {}),
+  },
 ]);
