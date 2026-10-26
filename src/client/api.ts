@@ -1,4 +1,5 @@
 import type { CreateInput, ErrorCode, Index, Op, TaskView } from '@/core'
+import { VERSION, VERSION_HEADER } from '@/core/version'
 
 export class ApiError extends Error {
   code: ErrorCode | 'internal'
@@ -17,10 +18,11 @@ async function handle<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>
 }
 
-const JSON_HEADERS = { 'Content-Type': 'application/json' }
+const HEADERS = { [VERSION_HEADER]: VERSION }
+const JSON_HEADERS = { ...HEADERS, 'Content-Type': 'application/json' }
 
 export function fetchIndex(): Promise<Index> {
-  return fetch('/api/tasks').then((res) => handle<Index>(res))
+  return fetch('/api/tasks', { headers: HEADERS }).then((res) => handle<Index>(res))
 }
 
 export function createTask(input: CreateInput): Promise<TaskView> {
@@ -36,5 +38,5 @@ export function applyOp(id: string, op: Op): Promise<TaskView> {
 }
 
 export function removeTask(id: string): Promise<{ ok: true }> {
-  return fetch(`/api/tasks/${id}`, { method: 'DELETE' }).then((res) => handle<{ ok: true }>(res))
+  return fetch(`/api/tasks/${id}`, { method: 'DELETE', headers: HEADERS }).then((res) => handle<{ ok: true }>(res))
 }
