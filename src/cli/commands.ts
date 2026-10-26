@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import {
+  addAttachment,
   applyOp,
   buildIndex,
   createTask,
@@ -9,11 +10,13 @@ import {
   isDone,
   KbError,
   openDb,
+  MAX_ATTACHMENT_BYTES,
   rankBetween,
   readTask,
+  removeAttachment,
   viewTask,
 } from '../core'
-import type { Db, LinkType, Op, TaskView } from '../core'
+import type { Attachment, Db, LinkType, Op, TaskView } from '../core'
 
 export type FlagType = 'string' | 'boolean'
 export type FlagDef = { name: string; short?: string; type: FlagType; desc: string }
@@ -96,6 +99,12 @@ export const COMMANDS: CommandDef[] = [
       { name: 'remove', type: 'boolean', desc: 'remove the link instead of adding it' },
     ],
   },
+  {
+    name: 'attach',
+    summary: 'Attach a file to a task (max 25 MB), or remove an attachment',
+    args: '<ID> <FILE | ATTACHMENT_ID>',
+    flags: [{ name: 'remove', type: 'boolean', desc: 'remove the attachment with the given id instead' }],
+  },
   { name: 'delete', summary: 'Delete a task (soft delete; the id is never reused)', args: '<ID>', flags: [] },
   { name: 'help', summary: 'Print this message or the help of the given command', args: '[COMMAND]', flags: [] },
 ]
@@ -104,6 +113,7 @@ export type CommandResult =
   | { kind: 'task'; value: TaskView }
   | { kind: 'detail'; value: TaskView }
   | { kind: 'tasks'; value: { total: number; tasks: TaskView[] }; offset: number; lines: { task: TaskView; depth: number }[] }
+  | { kind: 'attachment'; value: Attachment }
   | { kind: 'deleted'; value: { id: string; deleted: true } }
   | { kind: 'help'; value: HelpValue }
 
@@ -281,6 +291,19 @@ function cmdLink(db: Db, id: string, values: Values): CommandResult {
   return { kind: 'task', value: freshView(db, id) }
 }
 
+function cmdAttach(db: Db, positionals: string[], values: Values): CommandResult {
+  if (positionals.length !== 2) throw new KbError('usage', 'expected a task id and a file (or an attachment id with --remove)')
+  const [id, arg] = positionals
+  if (values.remove) {
+    removeAttachment(db, id, arg)
+    return { kind: 'task', value: freshView(db, id) }
+  }
+  const file = path.resolve(arg)
+  if (!fs.existsSync(file)) throw new KbError('not_found', `file ${arg} not found`)
+  if (fs.statSync(file).size > MAX_ATTACHMENT_BYTES) throw new KbError('invalid', 'attachment exceeds 25 MB')
+  return { kind: 'attachment', value: addAttachment(db, id, { filename: path.basename(file), data: fs.readFileSync(file) }) }
+}
+
 function cmdDelete(db: Db, id: string): CommandResult {
   deleteTask(db, id)
   return { kind: 'deleted', value: { id, deleted: true } }
@@ -303,6 +326,8 @@ export async function runCommand(name: string, values: Values, positionals: stri
       return cmdComment(db, requireOneId(positionals), values)
     case 'link':
       return cmdLink(db, requireOneId(positionals), values)
+    case 'attach':
+      return cmdAttach(db, positionals, values)
     case 'delete':
       return cmdDelete(db, requireOneId(positionals))
     default:

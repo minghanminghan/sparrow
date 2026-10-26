@@ -6,6 +6,7 @@ import NextLink from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { Backlink, Link as TaskLink, LinkType, Ref, TaskView } from '@/core'
 import { columnByRole, isDone } from '@/core/columns'
+import { formatSize, isInlineImage } from '@/core/mime'
 import { ApiError } from '@/client/api'
 import { useKb } from '@/client/store'
 import { AssigneeField } from '@/components/AssigneeField'
@@ -509,6 +510,66 @@ function References({ task }: { task: TaskView }) {
   )
 }
 
+function Attachments({ task }: { task: TaskView }) {
+  const attach = useKb((s) => s.attach)
+  const detach = useKb((s) => s.detach)
+  const [busy, setBusy] = useState(false)
+
+  async function upload(files: File[]): Promise<void> {
+    setBusy(true)
+    for (const file of files) await attach(task.id, file)
+    setBusy(false)
+  }
+
+  return (
+    <div className="space-y-2 text-sm">
+      <ul className="space-y-2">
+        {task.attachments.map((a) => {
+          const url = `/api/tasks/${task.id}/attachments/${a.id}`
+          return (
+            <li key={a.id}>
+              {isInlineImage(a.mime) && (
+                <a href={url} target="_blank" rel="noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt={a.filename} className="mb-1 max-h-48 rounded border border-gray-200" />
+                </a>
+              )}
+              <div className="flex items-center gap-2">
+                <a href={url} download={a.filename} className="truncate text-blue-600 hover:underline">
+                  {a.filename}
+                </a>
+                <span className="shrink-0 text-xs text-gray-400">{formatSize(a.size)}</span>
+                <button
+                  onClick={() => {
+                    if (window.confirm(`Remove ${a.filename}?`)) void detach(task.id, a.id)
+                  }}
+                  aria-label="Remove attachment"
+                  className="text-gray-400 hover:text-gray-700"
+                >
+                  ×
+                </button>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+      <label className="inline-block cursor-pointer rounded border border-gray-200 px-2 py-1 text-sm text-gray-500 hover:border-gray-400">
+        {busy ? 'Uploading…' : '+ Attach file'}
+        <input
+          type="file"
+          multiple
+          disabled={busy}
+          onChange={(e) => {
+            void upload(Array.from(e.target.files ?? []))
+            e.target.value = ''
+          }}
+          className="hidden"
+        />
+      </label>
+    </div>
+  )
+}
+
 function CommentItem({ task, index }: { task: TaskView; index: number }) {
   const op = useKb((s) => s.op)
   const c = task.comments[index]
@@ -689,6 +750,11 @@ export function TaskDetail({ id, fullPage = false }: { id: string; fullPage?: bo
       <section>
         <h2 className="mb-2 text-sm font-semibold text-gray-700">References</h2>
         <References task={task} />
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-gray-700">Attachments</h2>
+        <Attachments task={task} />
       </section>
 
       <section>

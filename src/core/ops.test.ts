@@ -1,8 +1,10 @@
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { beforeEach, expect, test } from 'vitest'
+import { addAttachment, removeAttachment } from './attachments'
 import { MIGRATIONS, openDb } from './db'
+import { MAX_ATTACHMENT_BYTES } from './mime'
 import type { Db } from './db'
 import { hash } from './format'
 import { buildIndex, nextTask, viewTask } from './indexer'
@@ -66,6 +68,20 @@ test('done sets and clears completed', () => {
   const t = createTask(db, { title: 'a' })
   expect(applyOp(db, t.id, { type: 'setStatus', status: 'done' }).completed).toBeTruthy()
   expect(applyOp(db, t.id, { type: 'setStatus', status: 'todo' }).completed).toBeUndefined()
+})
+
+test('attachments: uuid file on disk, listed in index, remove keeps the file', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'sparrow-att-'))
+  const t = createTask(db, { title: 'a' })
+  const att = addAttachment(db, t.id, { filename: '../x/shot.png', data: new Uint8Array([1, 2]) }, dir)
+  expect(att).toMatchObject({ filename: 'shot.png', mime: 'image/png', size: 2 })
+  expect(existsSync(path.join(dir, att.id))).toBe(true)
+  expect(viewTask(buildIndex(db), t.id)!.attachments.map((a) => a.id)).toEqual([att.id])
+  removeAttachment(db, t.id, att.id)
+  expect(viewTask(buildIndex(db), t.id)!.attachments).toEqual([])
+  expect(existsSync(path.join(dir, att.id))).toBe(true)
+  const big = new Uint8Array(MAX_ATTACHMENT_BYTES + 1)
+  expect(code(() => addAttachment(db, t.id, { filename: 'big', data: big }, dir))).toBe('invalid')
 })
 
 test('index computes backlinks, progress, and next task', () => {
