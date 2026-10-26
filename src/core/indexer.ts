@@ -1,8 +1,9 @@
+import { loadAttachments } from './attachments'
 import { columnByRole, isDone, loadConfig } from './config'
 import type { Db } from './db'
 import { hash } from './format'
 import { loadTasks } from './store'
-import type { Config, Task } from './types'
+import type { Attachment, Config, Task } from './types'
 
 export type Backlink = { type: 'blocked-by' | 'relates' | 'mentioned-in'; id: string; done?: true }
 export type TaskView = Task & {
@@ -12,6 +13,7 @@ export type TaskView = Task & {
   blocked: boolean
   children: string[]
   progress: { done: number; total: number }
+  attachments: Attachment[]
 }
 export type Index = { config: Config; tasks: TaskView[] }
 
@@ -32,6 +34,7 @@ function mentionsIn(task: Task): string[] {
 export function buildIndex(db: Db): Index {
   const config = loadConfig(db)
   const tasksById = new Map<string, Task>(loadTasks(db).map((t) => [t.id, t]))
+  const attachments = loadAttachments(db)
 
   const backlinks = new Map<string, Backlink[]>()
   const addBacklink = (id: string, bl: Backlink) => {
@@ -67,6 +70,7 @@ export function buildIndex(db: Db): Index {
       blocked: bls.some((b) => b.type === 'blocked-by' && !b.done),
       children: kids,
       progress: { done, total: kids.length },
+      attachments: attachments.get(task.id) ?? [],
     }
   })
 

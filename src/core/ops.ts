@@ -35,7 +35,7 @@ export type CreateInput = {
   refs?: Ref[]
 }
 
-const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+export const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 
 const ID_RE = /^\d+$/
 

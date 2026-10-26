@@ -2,7 +2,14 @@ import { create } from 'zustand'
 import { isDone } from '@/core/columns'
 import type { Config, CreateInput, Index, Op, TaskView } from '@/core'
 import type { ServerEvent } from '@/server/state'
-import { ApiError, applyOp as apiApplyOp, createTask as apiCreateTask, removeTask as apiRemoveTask } from './api'
+import {
+  ApiError,
+  applyOp as apiApplyOp,
+  createTask as apiCreateTask,
+  removeAttachment as apiRemoveAttachment,
+  removeTask as apiRemoveTask,
+  uploadAttachment as apiUploadAttachment,
+} from './api'
 
 export type Filters = {
   q: string
@@ -27,6 +34,8 @@ type KbStore = {
   op(id: string, op: Op, optimistic?: (t: TaskView) => TaskView): Promise<void>
   create(input: CreateInput): Promise<TaskView>
   remove(id: string): Promise<void>
+  attach(id: string, file: File): Promise<void>
+  detach(id: string, attId: string): Promise<void>
   openPanel(id: string | null): void
   openCreate(v: { status?: string } | null): void
   setFilters(p: Partial<Filters>): void
@@ -62,6 +71,17 @@ export const useKb = create<KbStore>()((set, get) => {
     const toast: Toast = { id: crypto.randomUUID(), message }
     set((s) => ({ toasts: [...s.toasts, toast] }))
     setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== toast.id) })), TOAST_MS)
+  }
+
+  async function settle(request: Promise<TaskView>): Promise<void> {
+    try {
+      const task = await request
+      confirmed[task.id] = task
+      const index = get().index
+      set({ byId: { ...get().byId, [task.id]: task }, index: index ? replaceTask(index, task) : index })
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : String(err))
+    }
   }
 
   return {
@@ -166,6 +186,14 @@ export const useKb = create<KbStore>()((set, get) => {
         pushToast(err instanceof Error ? err.message : String(err))
         throw err
       }
+    },
+
+    attach(id, file) {
+      return settle(apiUploadAttachment(id, file))
+    },
+
+    detach(id, attId) {
+      return settle(apiRemoveAttachment(id, attId))
     },
 
     openPanel(id) {

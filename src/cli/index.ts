@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util'
-import { EXIT, KbError } from '../core'
+import { EXIT, formatSize, KbError } from '../core'
 import type { TaskView } from '../core'
 import { COMMANDS, GLOBAL_FLAGS, runCommand } from './commands'
 import type { CommandResult, FlagDef, HelpValue, Values } from './commands'
@@ -56,6 +56,10 @@ function printDetail(t: TaskView): void {
     console.log('\nComments:')
     comments.forEach((c, i) => console.log(prefixes[i] + c.body.trimEnd().split('\n').join('\n' + ' '.repeat(prefixes[i].length))))
   }
+  if (t.attachments.length) {
+    console.log('\nAttachments:')
+    printTable(t.attachments.map((a) => [a.id, formatSize(a.size), a.mime, a.filename]))
+  }
 }
 
 function printOptions(flags: FlagDef[]): void {
@@ -96,6 +100,9 @@ function printResult(result: CommandResult, jsonMode: boolean): void {
       return
     case 'tasks':
       printTasks(result.lines, result.offset, result.value.total)
+      return
+    case 'attachment':
+      console.log(`${result.value.id}  ${formatSize(result.value.size)}  ${result.value.filename}`)
       return
     case 'deleted':
       console.log(`${result.value.id} deleted`)
