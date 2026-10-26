@@ -1,22 +1,15 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import {
-  addAttachment,
-  applyOp,
-  buildIndex,
-  createTask,
-  deleteTask,
-  EXIT,
-  isDone,
-  KbError,
-  openDb,
-  MAX_ATTACHMENT_BYTES,
-  rankBetween,
-  readTask,
-  removeAttachment,
-  viewTask,
-} from '../core'
-import type { Attachment, Db, LinkType, Op, TaskView } from '../core'
+import { isDone } from '../core/columns'
+import { EXIT, KbError } from '../core/errors'
+import type { Index, TaskView } from '../core/indexer'
+import { MAX_ATTACHMENT_BYTES, mimeFor } from '../core/mime'
+import type { CreateInput, Op } from '../core/ops'
+import { rankBetween } from '../core/rank'
+import type { Attachment, LinkType } from '../core/types'
+import { VERSION, VERSION_HEADER } from '../core/version'
+import { configPath, readConfig, serverUrl, writeConfig } from './config'
+import { api, call, sendJson, toError } from './http'
 
 export type FlagType = 'string' | 'boolean'
 export type FlagDef = { name: string; short?: string; type: FlagType; desc: string }
@@ -86,7 +79,7 @@ export const COMMANDS: CommandDef[] = [
     flags: [
       { name: 'body', type: 'string', desc: 'comment text, or "-" for stdin' },
       { name: 'body-file', type: 'string', desc: 'path to a file with comment text' },
-      { name: 'author', type: 'string', desc: 'default: KB_AUTHOR, then "ai"' },
+      { name: 'author', type: 'string', desc: 'default: SPARROW_AUTHOR, then Tailscale login, then board user' },
     ],
   },
   {
@@ -106,6 +99,8 @@ export const COMMANDS: CommandDef[] = [
     flags: [{ name: 'remove', type: 'boolean', desc: 'remove the attachment with the given id instead' }],
   },
   { name: 'delete', summary: 'Delete a task (soft delete; the id is never reused)', args: '<ID>', flags: [] },
+  { name: 'config', summary: 'Show CLI config, or set the server url', args: '[set url <URL>]', flags: [] },
+  { name: 'upgrade', summary: "Replace this CLI with the server's version", flags: [] },
   { name: 'help', summary: 'Print this message or the help of the given command', args: '[COMMAND]', flags: [] },
 ]
 
@@ -115,6 +110,8 @@ export type CommandResult =
   | { kind: 'tasks'; value: { total: number; tasks: TaskView[] }; offset: number; lines: { task: TaskView; depth: number }[] }
   | { kind: 'attachment'; value: Attachment }
   | { kind: 'deleted'; value: { id: string; deleted: true } }
+  | { kind: 'config'; value: { file: string; url: string } }
+  | { kind: 'upgraded'; value: { file: string; from: string; to: string } }
   | { kind: 'help'; value: HelpValue }
 
 export type HelpValue = { command?: string; commands: CommandDef[]; globalFlags: FlagDef[]; exitCodes: Record<string, number> }
@@ -151,10 +148,6 @@ function todayLocal(): string {
   return local.toISOString().slice(0, 10)
 }
 
-function freshView(db: Db, id: string): TaskView {
-  return viewTask(buildIndex(db), id)!
-}
-
 function cmdHelp(positionals: string[]): CommandResult {
   const exitCodes = { ok: 0, ...EXIT }
   const name = positionals[0]
@@ -162,30 +155,6 @@ function cmdHelp(positionals: string[]): CommandResult {
   const cmd = COMMANDS.find((c) => c.name === name)
   if (!cmd) throw new KbError('usage', `unknown command "${name}"`)
   return { kind: 'help', value: { command: name, commands: [cmd], globalFlags: GLOBAL_FLAGS, exitCodes } }
-}
-
-function cmdShow(db: Db, id: string): CommandResult {
-  const view = viewTask(buildIndex(db), id)
-  if (!view) throw new KbError('not_found', `task ${id} not found`)
-  return { kind: 'detail', value: view }
-}
-
-function filterTasks(db: Db, values: Values): TaskView[] {
-  const idx = buildIndex(db)
-  let tasks = idx.tasks
-  if (!values.all) tasks = tasks.filter((t) => !isDone(idx.config, t.status))
-  if (values.status !== undefined) tasks = tasks.filter((t) => t.status === values.status)
-  if (values.parent !== undefined) tasks = tasks.filter((t) => t.parent === values.parent)
-  if (values.assignee !== undefined) tasks = tasks.filter((t) => t.assignee === values.assignee)
-  if (values['due-before'] !== undefined) {
-    const before = values['due-before'] as string
-    tasks = tasks.filter((t) => t.due !== undefined && t.due < before)
-  }
-  if (values.overdue) {
-    const today = todayLocal()
-    tasks = tasks.filter((t) => t.due !== undefined && t.due < today)
-  }
-  return tasks
 }
 
 function treeLines(tasks: TaskView[]): { task: TaskView; depth: number }[] {
@@ -207,30 +176,52 @@ function treeLines(tasks: TaskView[]): { task: TaskView; depth: number }[] {
   return out
 }
 
-function cmdList(db: Db, values: Values): CommandResult {
-  const tasks = filterTasks(db, values)
+const taskPath = (id: string): string => `/api/tasks/${encodeURIComponent(id)}`
+const getTask = (id: string): Promise<TaskView> => api<TaskView>(taskPath(id))
+const postOp = (id: string, op: Op): Promise<TaskView> => sendJson<TaskView>(taskPath(id), 'POST', { op })
+
+function filterTasks(idx: Index, values: Values): TaskView[] {
+  let tasks = idx.tasks
+  if (!values.all) tasks = tasks.filter((t) => !isDone(idx.config, t.status))
+  if (values.status !== undefined) tasks = tasks.filter((t) => t.status === values.status)
+  if (values.parent !== undefined) tasks = tasks.filter((t) => t.parent === values.parent)
+  if (values.assignee !== undefined) tasks = tasks.filter((t) => t.assignee === values.assignee)
+  if (values['due-before'] !== undefined) {
+    const before = values['due-before'] as string
+    tasks = tasks.filter((t) => t.due !== undefined && t.due < before)
+  }
+  if (values.overdue) {
+    const today = todayLocal()
+    tasks = tasks.filter((t) => t.due !== undefined && t.due < today)
+  }
+  return tasks
+}
+
+async function cmdList(values: Values): Promise<CommandResult> {
   const offset = intFlag(values, 'offset', 0)
+  const limit = intFlag(values, 'limit', 20)
+  const tasks = filterTasks(await api<Index>('/api/tasks'), values)
   const all = values.tree ? treeLines(tasks) : tasks.map((t) => ({ task: t, depth: 0 }))
-  const lines = all.slice(offset, offset + intFlag(values, 'limit', 20))
+  const lines = all.slice(offset, offset + limit)
   return { kind: 'tasks', value: { total: all.length, tasks: lines.map((l) => l.task) }, offset, lines }
 }
 
-function cmdCreate(db: Db, values: Values): CommandResult {
+async function cmdCreate(values: Values): Promise<CommandResult> {
   const title = values.title as string | undefined
   if (!title) throw new KbError('usage', 'create requires --title')
-  const task = createTask(db, {
+  const input: CreateInput = {
     title,
     parent: values.parent as string | undefined,
     status: values.status as string | undefined,
     due: values.due as string | undefined,
     assignee: values.assignee as string | undefined,
     body: readBodyInput(values),
-  })
-  return { kind: 'task', value: freshView(db, task.id) }
+  }
+  return { kind: 'task', value: await sendJson<TaskView>('/api/tasks', 'POST', input) }
 }
 
-function neighborRank(db: Db, status: string, selfId: string, beforeId?: string, afterId?: string): string {
-  const siblings = buildIndex(db).tasks.filter((t) => t.status === status && t.id !== selfId)
+async function neighborRank(status: string, selfId: string, beforeId?: string, afterId?: string): Promise<string> {
+  const siblings = (await api<Index>('/api/tasks')).tasks.filter((t) => t.status === status && t.id !== selfId)
   if (beforeId !== undefined) {
     const i = siblings.findIndex((t) => t.id === beforeId)
     if (i === -1) throw new KbError('not_found', `task ${beforeId} not found in status "${status}"`)
@@ -241,40 +232,40 @@ function neighborRank(db: Db, status: string, selfId: string, beforeId?: string,
   return rankBetween(siblings[i].rank, siblings[i + 1]?.rank)
 }
 
-function cmdUpdate(db: Db, id: string, values: Values): CommandResult {
-  let task = readTask(db, id)
-  const apply = (op: Op): void => {
-    task = applyOp(db, id, op)
+async function cmdUpdate(id: string, values: Values): Promise<CommandResult> {
+  let task = await getTask(id)
+  const apply = async (op: Op): Promise<void> => {
+    task = await postOp(id, op)
   }
   if ((values['ref-label'] !== undefined || values['ref-remove']) && values.ref === undefined) {
     throw new KbError('usage', '--ref-label and --ref-remove require --ref')
   }
-  if (values.title !== undefined) apply({ type: 'setTitle', title: values.title as string, baseHash: values['title-hash'] as string | undefined })
+  if (values.title !== undefined) await apply({ type: 'setTitle', title: values.title as string, baseHash: values['title-hash'] as string | undefined })
   const body = readBodyInput(values)
-  if (body !== undefined) apply({ type: 'setBody', body, baseHash: values['body-hash'] as string | undefined })
-  if (values.status !== undefined) apply({ type: 'setStatus', status: values.status as string })
-  if (values.due !== undefined) apply({ type: 'setDue', due: values.due === 'none' ? null : (values.due as string) })
+  if (body !== undefined) await apply({ type: 'setBody', body, baseHash: values['body-hash'] as string | undefined })
+  if (values.status !== undefined) await apply({ type: 'setStatus', status: values.status as string })
+  if (values.due !== undefined) await apply({ type: 'setDue', due: values.due === 'none' ? null : (values.due as string) })
   if (values.assignee !== undefined) {
-    apply({ type: 'setAssignee', assignee: values.assignee === 'none' ? null : (values.assignee as string) })
+    await apply({ type: 'setAssignee', assignee: values.assignee === 'none' ? null : (values.assignee as string) })
   }
-  if (values.parent !== undefined) apply({ type: 'setParent', parent: values.parent as string })
+  if (values.parent !== undefined) await apply({ type: 'setParent', parent: values.parent as string })
   if (values.before !== undefined || values.after !== undefined) {
-    const rank = neighborRank(db, task.status, id, values.before as string | undefined, values.after as string | undefined)
-    apply({ type: 'setRank', rank })
+    const rank = await neighborRank(task.status, id, values.before as string | undefined, values.after as string | undefined)
+    await apply({ type: 'setRank', rank })
   }
   if (values.ref !== undefined) {
     const url = values.ref as string
     const label = values['ref-label'] as string | undefined
-    apply(values['ref-remove'] ? { type: 'removeRef', url } : { type: 'addRef', ref: label ? { url, label } : { url } })
+    await apply(values['ref-remove'] ? { type: 'removeRef', url } : { type: 'addRef', ref: label ? { url, label } : { url } })
   }
-  return { kind: 'task', value: freshView(db, id) }
+  return { kind: 'task', value: task }
 }
 
-function cmdComment(db: Db, id: string, values: Values): CommandResult {
+// An empty author lets the server pick: Tailscale-User-Login, then the board user, then "ai".
+async function cmdComment(id: string, values: Values): Promise<CommandResult> {
   const body = requireBody(values, 'comment')
-  const author = (values.author as string | undefined) ?? process.env.KB_AUTHOR ?? 'ai'
-  applyOp(db, id, { type: 'addComment', author, body })
-  return { kind: 'task', value: freshView(db, id) }
+  const author = (values.author as string | undefined) ?? process.env.SPARROW_AUTHOR ?? process.env.KB_AUTHOR ?? ''
+  return { kind: 'task', value: await postOp(id, { type: 'addComment', author, body }) }
 }
 
 function linkTypeAndTarget(values: Values): { type: LinkType; target: string } {
@@ -284,53 +275,81 @@ function linkTypeAndTarget(values: Values): { type: LinkType; target: string } {
   return { type: given[0], target: values[given[0]] as string }
 }
 
-function cmdLink(db: Db, id: string, values: Values): CommandResult {
+async function cmdLink(id: string, values: Values): Promise<CommandResult> {
   const { type, target } = linkTypeAndTarget(values)
   const op: Op = values.remove ? { type: 'removeLink', link: { type, id: target } } : { type: 'addLink', link: { type, id: target } }
-  applyOp(db, id, op)
-  return { kind: 'task', value: freshView(db, id) }
+  return { kind: 'task', value: await postOp(id, op) }
 }
 
-function cmdAttach(db: Db, positionals: string[], values: Values): CommandResult {
+async function cmdAttach(positionals: string[], values: Values): Promise<CommandResult> {
   if (positionals.length !== 2) throw new KbError('usage', 'expected a task id and a file (or an attachment id with --remove)')
   const [id, arg] = positionals
   if (values.remove) {
-    removeAttachment(db, id, arg)
-    return { kind: 'task', value: freshView(db, id) }
+    return { kind: 'task', value: await api<TaskView>(`${taskPath(id)}/attachments/${encodeURIComponent(arg)}`, { method: 'DELETE' }) }
   }
   const file = path.resolve(arg)
   if (!fs.existsSync(file)) throw new KbError('not_found', `file ${arg} not found`)
   if (fs.statSync(file).size > MAX_ATTACHMENT_BYTES) throw new KbError('invalid', 'attachment exceeds 25 MB')
-  return { kind: 'attachment', value: addAttachment(db, id, { filename: path.basename(file), data: fs.readFileSync(file) }) }
+  const form = new FormData()
+  form.append('file', new File([fs.readFileSync(file)], path.basename(file), { type: mimeFor(file) }))
+  const view = await api<TaskView>(`${taskPath(id)}/attachments`, { method: 'POST', body: form })
+  // Attachments are ordered by creation, so the new one is last.
+  return { kind: 'attachment', value: view.attachments[view.attachments.length - 1] as Attachment }
 }
 
-function cmdDelete(db: Db, id: string): CommandResult {
-  deleteTask(db, id)
+async function cmdDelete(id: string): Promise<CommandResult> {
+  await api(taskPath(id), { method: 'DELETE' })
   return { kind: 'deleted', value: { id, deleted: true } }
 }
 
-export async function runCommand(name: string, values: Values, positionals: string[]): Promise<CommandResult> {
-  if (name === 'help') return cmdHelp(positionals)
+function cmdConfig(positionals: string[]): CommandResult {
+  if (positionals.length > 0) {
+    const [verb, key, value] = positionals
+    if (positionals.length !== 3 || verb !== 'set' || key !== 'url') throw new KbError('usage', 'expected: sparrow config set url <URL>')
+    if (!/^https?:\/\/[^/]/.test(value) || !URL.canParse(value)) throw new KbError('usage', `invalid url "${value}"`)
+    writeConfig({ ...readConfig(), url: value.replace(/\/+$/, '') })
+  }
+  return { kind: 'config', value: { file: configPath(), url: serverUrl() } }
+}
 
-  const db = openDb()
+// Downloads the server's CLI bundle and swaps it in for the running file.
+async function cmdUpgrade(): Promise<CommandResult> {
+  const file = fs.realpathSync(process.argv[1])
+  if (!file.endsWith('.js')) throw new KbError('usage', `cannot upgrade ${file}: not a built sparrow bundle`)
+  const res = await call('/cli/sparrow.js', {}, true)
+  if (!res.ok) throw await toError(res)
+  const tmp = `${file}.${process.pid}.tmp`
+  fs.writeFileSync(tmp, Buffer.from(await res.arrayBuffer()), { mode: 0o755 })
+  fs.renameSync(tmp, file)
+  return { kind: 'upgraded', value: { file, from: VERSION, to: res.headers.get(VERSION_HEADER) ?? 'unknown' } }
+}
+
+export async function runCommand(name: string, values: Values, positionals: string[]): Promise<CommandResult> {
   switch (name) {
+    case 'help':
+      return cmdHelp(positionals)
     case 'list':
-      return cmdList(db, values)
+      return cmdList(values)
     case 'show':
-      return cmdShow(db, requireOneId(positionals))
+      return { kind: 'detail', value: await getTask(requireOneId(positionals)) }
     case 'create':
-      return cmdCreate(db, values)
+      return cmdCreate(values)
     case 'update':
-      return cmdUpdate(db, requireOneId(positionals), values)
+      return cmdUpdate(requireOneId(positionals), values)
     case 'comment':
-      return cmdComment(db, requireOneId(positionals), values)
+      return cmdComment(requireOneId(positionals), values)
     case 'link':
-      return cmdLink(db, requireOneId(positionals), values)
+      return cmdLink(requireOneId(positionals), values)
     case 'attach':
-      return cmdAttach(db, positionals, values)
+      return cmdAttach(positionals, values)
     case 'delete':
-      return cmdDelete(db, requireOneId(positionals))
+      return cmdDelete(requireOneId(positionals))
+    case 'config':
+      return cmdConfig(positionals)
+    case 'upgrade':
+      return cmdUpgrade()
     default:
       throw new KbError('usage', `unknown command "${name}"`)
   }
 }
+
