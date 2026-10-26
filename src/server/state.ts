@@ -57,7 +57,7 @@ export function refresh(state: State): void {
   state.index = next
 }
 
-const STATUS: Record<ErrorCode, number> = { usage: 400, not_found: 404, conflict: 409, invalid: 422 }
+const STATUS: Record<ErrorCode, number> = { usage: 400, not_found: 404, conflict: 409, invalid: 422, version: 426 }
 
 export function errorResponse(err: unknown): Response {
   if (err instanceof KbError) {
