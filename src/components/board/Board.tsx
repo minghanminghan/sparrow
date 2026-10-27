@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { DndContext, DragOverlay, PointerSensor, closestCorners, pointerWithin, useSensor, useSensors } from '@dnd-kit/core'
 import type { CollisionDetection, DragEndEvent, DragStartEvent } from '@dnd-kit/core'
+import { isDone } from '@/core/columns'
 import { rankBetween } from '@/core/rank'
 import { useKb } from '@/client/store'
 import { Column } from './Column'
@@ -86,10 +87,13 @@ export function Board() {
 
     const rank = rankBetween(siblings[insertAt - 1]?.rank, siblings[insertAt]?.rank)
 
-    if (sourceKey !== destKey) {
-      void op(id, { type: 'setStatus', status: destKey }, (t) => ({ ...t, status: destKey }))
+    if (sourceKey === destKey) {
+      void op(id, { type: 'setRank', rank }, (t) => ({ ...t, rank }))
+      return
     }
-    void op(id, { type: 'setRank', rank }, (t) => ({ ...t, rank }))
+    // One op, not setStatus + setRank: the server can apply two concurrent requests out of order.
+    const completed = isDone(index.config, destKey) ? (task.completed ?? new Date().toISOString()) : undefined
+    void op(id, { type: 'setStatus', status: destKey, rank }, (t) => ({ ...t, status: destKey, rank, completed }))
   }
 
   if (!columns) {

@@ -8,7 +8,7 @@ import { loadTasks, saveTask } from './store'
 import type { Config, Link, Ref, Task } from './types'
 
 export type Op =
-  | { type: 'setStatus'; status: string }
+  | { type: 'setStatus'; status: string; rank?: string }
   | { type: 'setRank'; rank: string }
   | { type: 'setDue'; due: string | null }
   | { type: 'setAssignee'; assignee: string | null }
@@ -52,6 +52,19 @@ function setStatus(config: Config, task: Task, status: string, at: string): void
   task.completed = isDone(config, status) ? (task.completed ?? at) : undefined
 }
 
+// Ranks only order tasks within a column, so a task changing columns needs a new one.
+function move(db: Db, config: Config, task: Task, status: string, at: string, rank?: string): void {
+  const moved = status !== task.status
+  setStatus(config, task, status, at)
+  if (rank) task.rank = rank
+  else if (moved) task.rank = rankAtEnd(db, status)
+}
+
+function rankAtEnd(db: Db, status: string): string {
+  const last = db.prepare('SELECT MAX(rank) AS r FROM tasks WHERE status = ? AND deleted_at IS NULL').get(status) as { r: string | null }
+  return generateKeyBetween(last.r, null)
+}
+
 function checkHash(field: string, current: string, baseHash?: string): void {
   if (baseHash !== undefined && baseHash !== hash(current)) {
     throw new KbError('conflict', `${field} changed since it was read`)
@@ -73,7 +86,7 @@ function checkParent(db: Db, id: string, parent: string): void {
 function apply(db: Db, config: Config, task: Task, op: Op, at: string): void {
   switch (op.type) {
     case 'setStatus':
-      return setStatus(config, task, op.status, at)
+      return move(db, config, task, op.status, at, op.rank)
     case 'setRank':
       task.rank = op.rank
       return
@@ -120,7 +133,7 @@ function apply(db: Db, config: Config, task: Task, op: Op, at: string): void {
         throw new KbError('conflict', `${task.id} is already claimed by ${task.assignee}`)
       }
       task.assignee = op.assignee
-      return setStatus(config, task, columnByRole(config, 'active').key, at)
+      return move(db, config, task, columnByRole(config, 'active').key, at)
   }
 }
 
@@ -159,8 +172,7 @@ export function createTask(db: Db, input: CreateInput): Task {
       extra: {},
     }
     setStatus(config, task, status, at)
-    const last = db.prepare('SELECT MAX(rank) AS r FROM tasks WHERE status = ? AND deleted_at IS NULL').get(status) as { r: string | null }
-    task.rank = input.rank ?? generateKeyBetween(last.r, null)
+    task.rank = input.rank ?? rankAtEnd(db, status)
     task.id = saveTask(db, task)
     return task
   })
