@@ -136,9 +136,10 @@ export const useKb = create<KbStore>()((set, get) => {
     connect() {
       if (eventSource || connecting) return
       connecting = true
-      loaded = loadOutbox().then((stored) =>
-        set((s) => ({ pending: [...stored.filter((e) => !s.pending.some((x) => x.clientId === e.clientId)), ...s.pending] })),
-      )
+      loaded = loadOutbox().then((stored) => {
+        set((s) => ({ pending: [...stored.filter((e) => !s.pending.some((x) => x.clientId === e.clientId)), ...s.pending] }))
+        if (get().connected) void get().flushOutbox()
+      })
       outboxReady = Promise.race([loaded, new Promise<void>((r) => setTimeout(r, CACHE_TIMEOUT_MS))])
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible' && get().connected) void get().flushOutbox()
@@ -280,15 +281,17 @@ export const useKb = create<KbStore>()((set, get) => {
         setPending((p) => [...p, entry])
         return null
       }
-      const { entry: left, task, cause } = await flushEntry(entry, outboxDeps)
-      if (task) merge(task)
-      if (!left) return task ?? null
-      if (left.error) {
+      // Only the create is awaited; photos go through the outbox so Create never waits on uploads.
+      const { entry: left, task, cause } = await flushEntry({ ...entry, photos: [] }, outboxDeps)
+      if (left?.error) {
         pushToast(left.error)
-        if (!task) throw cause
-        return task
+        throw cause
       }
-      setPending((p) => [...p, left])
+      if (task) {
+        merge(task)
+        if (!entry.photos.length) return task
+      }
+      setPending((p) => [...p, task ? { ...entry, taskId: task.id } : entry])
       void get().flushOutbox()
       return task ?? null
     },
