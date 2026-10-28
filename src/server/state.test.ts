@@ -36,4 +36,14 @@ describe('state', () => {
     refresh(state)
     expect(events).toEqual([])
   })
+
+  test('refresh bumps rev when only the config changes', () => {
+    const { state, events } = setup()
+    const before = state.rev
+    const config = { ...state.index.config, user: 'someone-else' }
+    state.db.prepare('UPDATE config SET value = ? WHERE id = 1').run(JSON.stringify(config))
+    refresh(state)
+    expect(state.rev).not.toBe(before)
+    expect(events).toEqual([{ type: 'rev', rev: state.rev }])
+  })
 })

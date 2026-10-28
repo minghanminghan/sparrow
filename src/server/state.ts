@@ -51,25 +51,21 @@ export function refresh(state: State): void {
   const oldById = new Map(state.index.tasks.map((t) => [t.id, t]))
   const nextById = new Map(next.tasks.map((t) => [t.id, t]))
 
-  let changed = false
   for (const [id, task] of nextById) {
     const prev = oldById.get(id)
     if (!prev || JSON.stringify(prev) !== JSON.stringify(task)) {
-      changed = true
       safeEmit(state.emitter, { type: 'upsert', task })
     }
   }
   for (const id of oldById.keys()) {
-    if (!nextById.has(id)) {
-      changed = true
-      safeEmit(state.emitter, { type: 'remove', id })
-    }
+    if (!nextById.has(id)) safeEmit(state.emitter, { type: 'remove', id })
   }
 
   state.index = next
-  if (changed) {
-    state.rev = revOf(next)
-    safeEmit(state.emitter, { type: 'rev', rev: state.rev })
+  const rev = revOf(next)
+  if (rev !== state.rev) {
+    state.rev = rev
+    safeEmit(state.emitter, { type: 'rev', rev })
   }
 }
 
