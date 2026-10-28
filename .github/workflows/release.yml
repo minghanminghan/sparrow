@@ -47,9 +47,15 @@ jobs:
             echo "released=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # deploy (task 15): self-hosted runner, gated on the release outputs.
-  #   needs: release
-  #   if: needs.release.outputs.released == 'true'
-  #   env: VERSION: ${{ needs.release.outputs.version }}
-  #   Checkout ref v$VERSION. package.json stays 0.1.0 in git, so run
-  #   `pnpm pkg set version=$VERSION` before `pnpm build`.
+  # Self-hosted runner on the mini PC (deploy/runner.sh). Fork PR workflows need approval to run (repo setting).
+  deploy:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: sparrow
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.release.outputs.version }}
+      - run: deploy/deploy.sh

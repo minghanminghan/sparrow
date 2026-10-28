@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # One-time (and safe to re-run) mini PC setup for sparrow. Run as root from a repo checkout:
 #   sudo [PORT=3417] [TS_PORT=8443] [NODE_BIN=/usr/bin/node] deploy/setup.sh
-# Creates the sparrow user and dirs, installs sparrow.service on 127.0.0.1:$PORT and the nightly
-# sparrow-backup.timer, and adds https://<host>:$TS_PORT -> 127.0.0.1:$PORT to the existing
-# tailscale serve config.
+# Creates the sparrow and sparrow-runner users and dirs, installs sparrow.service on 127.0.0.1:$PORT,
+# the nightly sparrow-backup.timer and sparrow-predeploy.service, lets sparrow-runner deploy (see
+# deploy/runner.sh), and adds https://<host>:$TS_PORT -> 127.0.0.1:$PORT to the existing tailscale
+# serve config.
 set -euo pipefail
 
 UNIT=/etc/systemd/system/sparrow.service
@@ -16,7 +17,7 @@ die() { echo "error: $*" >&2; exit 1; }
 step() { echo "==> $*"; }
 
 [[ $EUID -eq 0 ]] || die "run as root (sudo $0)"
-for cmd in systemctl ss tailscale install useradd; do
+for cmd in systemctl ss tailscale install useradd visudo; do
   command -v "$cmd" >/dev/null || die "$cmd not found"
 done
 
@@ -38,9 +39,22 @@ if ! id -u sparrow >/dev/null 2>&1; then
 fi
 runuser -u sparrow -- "$NODE_BIN" --version >/dev/null || die "user sparrow cannot run $NODE_BIN"
 
+step "user: sparrow-runner"
+if ! id -u sparrow-runner >/dev/null 2>&1; then
+  useradd --system --user-group --create-home --home-dir /home/sparrow-runner --shell /bin/bash sparrow-runner
+fi
+sudoers=$(printf '%s\n' "sparrow-runner ALL=(root) NOPASSWD: $(command -v systemctl) start sparrow-predeploy, $(command -v systemctl) restart sparrow")
+if [[ $(cat /etc/sudoers.d/sparrow-runner 2>/dev/null) != "$sudoers" ]]; then
+  printf '%s\n' "$sudoers" >/etc/sudoers.d/sparrow-runner.tmp
+  visudo -cqf /etc/sudoers.d/sparrow-runner.tmp || die "bad sudoers rule"
+  chmod 0440 /etc/sudoers.d/sparrow-runner.tmp
+  mv /etc/sudoers.d/sparrow-runner.tmp /etc/sudoers.d/sparrow-runner
+fi
+
 step "dirs: $DATA $BACKUPS $OPT/releases"
 install -d -o sparrow -g sparrow -m 0750 "$DATA" "$DATA/attachments" "$BACKUPS"
-install -d -o root -g root -m 0755 "$OPT" "$OPT/releases"
+install -d -o sparrow-runner -g sparrow-runner -m 0755 "$OPT" "$OPT/releases"
+chown -R sparrow-runner:sparrow-runner "$OPT/releases"
 
 step "port: 127.0.0.1:$PORT"
 pids=$(ss -Hltnp "sport = :$PORT" | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u || true)
@@ -52,9 +66,9 @@ if [[ -z $pids ]] && ss -Hltn "sport = :$PORT" | grep -q .; then
   die "port $PORT is in use. Pick another: PORT=<port> $0"
 fi
 
-step "systemd: sparrow.service sparrow-backup.service sparrow-backup.timer"
+step "systemd: sparrow.service sparrow-backup.service sparrow-backup.timer sparrow-predeploy.service"
 changed=()
-for unit in sparrow.service sparrow-backup.service sparrow-backup.timer; do
+for unit in sparrow.service sparrow-backup.service sparrow-backup.timer sparrow-predeploy.service; do
   rendered=$(sed -e "s|@NODE_BIN@|$NODE_BIN|" -e "s|@PORT@|$PORT|" "$HERE/$unit")
   dest=/etc/systemd/system/$unit
   if [[ ! -f $dest ]] || [[ $(cat "$dest") != "$rendered" ]]; then
@@ -94,14 +108,10 @@ cat <<EOF
 
 Done. sparrow will be at $URL (local: $TARGET).
 
-First deploy (until CD does it; needs git + pnpm, e.g. corepack enable pnpm):
-  V=0.1.0; R=$OPT/releases/\$V
-  sudo git clone --depth 1 <repo-url> \$R
-  cd \$R && sudo pnpm install --frozen-lockfile && sudo pnpm build
-  sudo -u sparrow env SPARROW_DB=$DATA/sparrow.db $NODE_BIN \$R/dist/migrate.js
-  sudo ln -sfn \$R $OPT/current
-  sudo systemctl restart sparrow
-  curl -fsS $TARGET/api/tasks >/dev/null && echo ok
+Deploys (CD): install the GitHub runner once, then each release on main deploys itself:
+  sudo RUNNER_TOKEN=<token> deploy/runner.sh
+  token: gh api -X POST repos/<owner>/<repo>/actions/runners/registration-token -q .token
+  First deploy: re-run the deploy job of the latest release workflow run.
 
 Move your laptop data (one time):
   laptop:  sqlite3 ~/.sparrow/sparrow.db ".backup /tmp/sparrow.db" && scp /tmp/sparrow.db <minipc>:/tmp/
