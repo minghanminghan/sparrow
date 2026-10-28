@@ -9,6 +9,8 @@ import { shrinkImage } from '@/client/image'
 import { visibleColumnTasks } from '@/components/board/visibleTasks'
 import { LINK_TYPES, LinkPicker } from '@/components/detail/TaskDetail'
 
+type Photo = { file: File; url: string }
+
 const FIELD = 'rounded border border-gray-300 px-2 py-1 text-sm'
 
 export function QuickCreate() {
@@ -28,7 +30,10 @@ export function QuickCreate() {
   const [links, setLinks] = useState<Link[]>([])
   const [refs, setRefs] = useState<Ref[]>([])
   const [url, setUrl] = useState('')
-  const [photos, setPhotos] = useState<{ file: File; url: string }[]>([])
+  const [photos, setPhotos] = useState<Photo[]>([])
+  const photosRef = useRef<Photo[]>([])
+  const pending = useRef<Promise<unknown>>(Promise.resolve())
+  const generation = useRef(0)
 
   useEffect(() => {
     if (!createFor) return
@@ -37,6 +42,11 @@ export function QuickCreate() {
   }, [createFor])
 
   if (!createFor) return null
+
+  function updatePhotos(next: Photo[]): void {
+    photosRef.current = next
+    setPhotos(next)
+  }
 
   function reset(): void {
     setTitle('')
@@ -47,8 +57,9 @@ export function QuickCreate() {
     setLinks([])
     setRefs([])
     setUrl('')
-    for (const p of photos) URL.revokeObjectURL(p.url)
-    setPhotos([])
+    generation.current++
+    for (const p of photosRef.current) URL.revokeObjectURL(p.url)
+    updatePhotos([])
   }
 
   function close(): void {
@@ -66,6 +77,7 @@ export function QuickCreate() {
     const t = title.trim()
     if (!t || submitting.current) return
     submitting.current = true
+    await pending.current
     // Opened from a column: put the new task at the top of it, like the old inline input did.
     const state = useKb.getState()
     const first =
@@ -83,7 +95,7 @@ export function QuickCreate() {
         body: body.trim() || undefined,
         links,
         refs,
-      }, photos.map((p) => p.file))
+      }, photosRef.current.map((p) => p.file))
       close()
     } catch {
       // the store already pushed a toast with the error
@@ -92,15 +104,19 @@ export function QuickCreate() {
     }
   }
 
-  async function addPhotos(files: FileList | null): Promise<void> {
+  function addPhotos(files: FileList | null): void {
     if (!files) return
-    const shrunk = await Promise.all([...files].map((f) => shrinkImage(f)))
-    setPhotos((prev) => [...prev, ...shrunk.map((file) => ({ file, url: URL.createObjectURL(file) }))])
+    const gen = generation.current
+    const job = Promise.all([...files].map((f) => shrinkImage(f))).then((shrunk) => {
+      if (gen !== generation.current) return
+      updatePhotos([...photosRef.current, ...shrunk.map((file) => ({ file, url: URL.createObjectURL(file) }))])
+    })
+    pending.current = Promise.all([pending.current, job])
   }
 
-  function removePhoto(p: { file: File; url: string }): void {
+  function removePhoto(p: Photo): void {
     URL.revokeObjectURL(p.url)
-    setPhotos((prev) => prev.filter((x) => x !== p))
+    updatePhotos(photosRef.current.filter((x) => x !== p))
   }
 
   function addRef(): void {
@@ -169,7 +185,7 @@ export function QuickCreate() {
               multiple
               className="hidden"
               onChange={(e) => {
-                void addPhotos(e.target.files)
+                addPhotos(e.target.files)
                 e.target.value = ''
               }}
             />
@@ -179,6 +195,7 @@ export function QuickCreate() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={p.url} alt="" className="h-12 w-12 rounded border border-gray-200 object-cover" />
               <button
+                type="button"
                 onClick={() => removePhoto(p)}
                 aria-label="Remove photo"
                 className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900 text-xs leading-none text-white"
