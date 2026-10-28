@@ -169,23 +169,28 @@ export const useKb = create<KbStore>()((set, get) => {
       }
 
       let opened = false
-      function start(c: Awaited<ReturnType<typeof loadCachedIndex>>): void {
+      function apply(c: Awaited<ReturnType<typeof loadCachedIndex>>): void {
+        if (!c || get().index) return
+        for (const t of c.index.tasks) confirmed[t.id] = t
+        set({
+          index: c.index,
+          byId: Object.fromEntries(c.index.tasks.map((t) => [t.id, t])),
+          rev: c.rev,
+          savedAt: c.savedAt,
+        })
+      }
+      function start(): void {
         if (opened) return
         opened = true
-        if (c && !get().index) {
-          for (const t of c.index.tasks) confirmed[t.id] = t
-          set({
-            index: c.index,
-            byId: Object.fromEntries(c.index.tasks.map((t) => [t.id, t])),
-            rev: c.rev,
-            savedAt: c.savedAt,
-          })
-        }
         open()
       }
       // IndexedDB can hang (Safari); never let it block the connection.
-      void loadCachedIndex().then(start)
-      setTimeout(() => start(null), CACHE_TIMEOUT_MS)
+      const timer = setTimeout(start, CACHE_TIMEOUT_MS)
+      void loadCachedIndex().then((c) => {
+        clearTimeout(timer)
+        apply(c)
+        start()
+      })
     },
 
     async op(id, opArg, optimistic) {
