@@ -65,7 +65,7 @@ export function Shell({ children }: { children: ReactNode }) {
   }, [openPanel, openCreate])
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-dvh flex-col">
       <OfflineBar />
       {phone && (
         <header className="flex items-center justify-between border-b border-gray-200 px-4 py-2 md:hidden">
@@ -112,7 +112,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <QuickCreate />
       <FilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} />
 
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-md:bottom-[calc(5rem+env(safe-area-inset-bottom))]">
         {toasts.map((t) => (
           <button
             key={t.id}
