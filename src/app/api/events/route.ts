@@ -13,6 +13,7 @@ function sse(data: string): Uint8Array {
 export async function GET(req: Request): Promise<Response> {
   try {
     const state = getState()
+    const clientRev = new URL(req.url).searchParams.get('rev')
 
     const stream = new ReadableStream({
       start(controller) {
@@ -46,7 +47,11 @@ export async function GET(req: Request): Promise<Response> {
 
         req.signal.addEventListener('abort', cleanup)
 
-        safeEnqueue(sse(JSON.stringify({ type: 'snapshot', index: state.index } satisfies ServerEvent)))
+        const first: ServerEvent =
+          clientRev === state.rev
+            ? { type: 'unchanged', rev: state.rev }
+            : { type: 'snapshot', index: state.index, rev: state.rev }
+        safeEnqueue(sse(JSON.stringify(first)))
       },
     })
 

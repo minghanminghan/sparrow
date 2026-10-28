@@ -1,13 +1,19 @@
 import { EventEmitter } from 'node:events'
-import { buildIndex, KbError, openDb } from '@/core'
+import { buildIndex, hash, KbError, openDb } from '@/core'
 import type { Db, ErrorCode, Index, TaskView } from '@/core'
 
 export type ServerEvent =
   | { type: 'upsert'; task: TaskView }
   | { type: 'remove'; id: string }
-  | { type: 'snapshot'; index: Index }
+  | { type: 'snapshot'; index: Index; rev: string }
+  | { type: 'unchanged'; rev: string }
+  | { type: 'rev'; rev: string }
 
-export type State = { db: Db; index: Index; emitter: EventEmitter }
+export type State = { db: Db; index: Index; rev: string; emitter: EventEmitter }
+
+export function revOf(index: Index): string {
+  return hash(JSON.stringify(index))
+}
 
 declare global {
   // eslint-disable-next-line no-var
@@ -18,7 +24,8 @@ function createState(): State {
   const db = openDb()
   const emitter = new EventEmitter()
   emitter.setMaxListeners(0)
-  return { db, index: buildIndex(db), emitter }
+  const index = buildIndex(db)
+  return { db, index, rev: revOf(index), emitter }
 }
 
 export function getState(): State {
@@ -44,17 +51,26 @@ export function refresh(state: State): void {
   const oldById = new Map(state.index.tasks.map((t) => [t.id, t]))
   const nextById = new Map(next.tasks.map((t) => [t.id, t]))
 
+  let changed = false
   for (const [id, task] of nextById) {
     const prev = oldById.get(id)
     if (!prev || JSON.stringify(prev) !== JSON.stringify(task)) {
+      changed = true
       safeEmit(state.emitter, { type: 'upsert', task })
     }
   }
   for (const id of oldById.keys()) {
-    if (!nextById.has(id)) safeEmit(state.emitter, { type: 'remove', id })
+    if (!nextById.has(id)) {
+      changed = true
+      safeEmit(state.emitter, { type: 'remove', id })
+    }
   }
 
   state.index = next
+  if (changed) {
+    state.rev = revOf(next)
+    safeEmit(state.emitter, { type: 'rev', rev: state.rev })
+  }
 }
 
 const STATUS: Record<ErrorCode, number> = { usage: 400, not_found: 404, conflict: 409, invalid: 422, version: 426, unavailable: 503 }
