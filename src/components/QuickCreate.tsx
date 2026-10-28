@@ -5,6 +5,7 @@ import type { KeyboardEvent } from 'react'
 import type { Link, Ref } from '@/core'
 import { rankBetween } from '@/core/rank'
 import { useKb } from '@/client/store'
+import { shrinkImage } from '@/client/image'
 import { visibleColumnTasks } from '@/components/board/visibleTasks'
 import { LINK_TYPES, LinkPicker } from '@/components/detail/TaskDetail'
 
@@ -27,6 +28,7 @@ export function QuickCreate() {
   const [links, setLinks] = useState<Link[]>([])
   const [refs, setRefs] = useState<Ref[]>([])
   const [url, setUrl] = useState('')
+  const [photos, setPhotos] = useState<{ file: File; url: string }[]>([])
 
   useEffect(() => {
     if (!createFor) return
@@ -45,6 +47,8 @@ export function QuickCreate() {
     setLinks([])
     setRefs([])
     setUrl('')
+    for (const p of photos) URL.revokeObjectURL(p.url)
+    setPhotos([])
   }
 
   function close(): void {
@@ -53,7 +57,7 @@ export function QuickCreate() {
   }
 
   function onClose(): void {
-    const dirty = title || parent || due || assignee || body || url || links.length || refs.length
+    const dirty = title || parent || due || assignee || body || url || links.length || refs.length || photos.length
     if (dirty && !window.confirm('Discard this task?')) return
     close()
   }
@@ -79,13 +83,24 @@ export function QuickCreate() {
         body: body.trim() || undefined,
         links,
         refs,
-      })
+      }, photos.map((p) => p.file))
       close()
     } catch {
       // the store already pushed a toast with the error
     } finally {
       submitting.current = false
     }
+  }
+
+  async function addPhotos(files: FileList | null): Promise<void> {
+    if (!files) return
+    const shrunk = await Promise.all([...files].map((f) => shrinkImage(f)))
+    setPhotos((prev) => [...prev, ...shrunk.map((file) => ({ file, url: URL.createObjectURL(file) }))])
+  }
+
+  function removePhoto(p: { file: File; url: string }): void {
+    URL.revokeObjectURL(p.url)
+    setPhotos((prev) => prev.filter((x) => x !== p))
   }
 
   function addRef(): void {
@@ -143,6 +158,35 @@ export function QuickCreate() {
             placeholder="Parent ID (optional)"
             className={`flex-1 ${FIELD}`}
           />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="cursor-pointer rounded border border-gray-300 px-2 py-1 text-xs text-gray-600">
+            📷 Photo
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                void addPhotos(e.target.files)
+                e.target.value = ''
+              }}
+            />
+          </label>
+          {photos.map((p) => (
+            <span key={p.url} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.url} alt="" className="h-12 w-12 rounded border border-gray-200 object-cover" />
+              <button
+                onClick={() => removePhoto(p)}
+                aria-label="Remove photo"
+                className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900 text-xs leading-none text-white"
+              >
+                ×
+              </button>
+            </span>
+          ))}
         </div>
 
         <section>
