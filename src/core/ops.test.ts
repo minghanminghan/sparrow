@@ -94,3 +94,21 @@ test('index computes backlinks, progress, and next task', () => {
   expect(va.progress).toEqual({ done: 0, total: 1 })
   expect(nextTask(idx)?.id).toBe(b.id)
 })
+
+test('createTask with the same clientId returns the first task', () => {
+  const a = createTask(db, { title: 'x', clientId: 'c1' })
+  const b = createTask(db, { title: 'x again', clientId: 'c1' })
+  expect(b.id).toBe(a.id)
+  expect(buildIndex(db).tasks.filter((t) => t.title.startsWith('x'))).toHaveLength(1)
+})
+
+test('createTask without clientId always creates', () => {
+  expect(createTask(db, { title: 'y' }).id).not.toBe(createTask(db, { title: 'y' }).id)
+})
+
+test('createTask retried after its task was deleted is not_found and makes no task', () => {
+  const a = createTask(db, { title: 'z', clientId: 'c2' })
+  deleteTask(db, a.id)
+  expect(code(() => createTask(db, { title: 'z', clientId: 'c2' }))).toBe('not_found')
+  expect(buildIndex(db).tasks.filter((t) => t.title === 'z')).toHaveLength(0)
+})

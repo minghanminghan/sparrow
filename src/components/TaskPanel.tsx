@@ -41,6 +41,16 @@ export function TaskPanel() {
         closing ? 'pointer-events-none animate-panel-out' : 'animate-panel-in'
       }`}
     >
+      <button
+        onClick={() => {
+          // Blur first so an open editor saves, as when tapping outside.
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+          openPanel(null)
+        }}
+        className="px-4 pt-3 text-sm text-gray-500 md:hidden"
+      >
+        ‹ Board
+      </button>
       <TaskDetail id={shownId} />
     </div>
   )

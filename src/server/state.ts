@@ -1,13 +1,19 @@
 import { EventEmitter } from 'node:events'
-import { buildIndex, KbError, openDb } from '@/core'
+import { buildIndex, hash, KbError, openDb } from '@/core'
 import type { Db, ErrorCode, Index, TaskView } from '@/core'
 
 export type ServerEvent =
   | { type: 'upsert'; task: TaskView }
   | { type: 'remove'; id: string }
-  | { type: 'snapshot'; index: Index }
+  | { type: 'snapshot'; index: Index; rev: string }
+  | { type: 'unchanged'; rev: string }
+  | { type: 'rev'; rev: string }
 
-export type State = { db: Db; index: Index; emitter: EventEmitter }
+export type State = { db: Db; index: Index; rev: string; emitter: EventEmitter }
+
+export function revOf(index: Index): string {
+  return hash(JSON.stringify(index))
+}
 
 declare global {
   // eslint-disable-next-line no-var
@@ -18,7 +24,8 @@ function createState(): State {
   const db = openDb()
   const emitter = new EventEmitter()
   emitter.setMaxListeners(0)
-  return { db, index: buildIndex(db), emitter }
+  const index = buildIndex(db)
+  return { db, index, rev: revOf(index), emitter }
 }
 
 export function getState(): State {
@@ -54,7 +61,14 @@ export function refresh(state: State): void {
     if (!nextById.has(id)) safeEmit(state.emitter, { type: 'remove', id })
   }
 
+  const configChanged = JSON.stringify(next.config) !== JSON.stringify(state.index.config)
   state.index = next
+  const rev = revOf(next)
+  if (rev !== state.rev) {
+    state.rev = rev
+    // A bare rev would let clients cache the new rev with a stale config.
+    safeEmit(state.emitter, configChanged ? { type: 'snapshot', index: next, rev } : { type: 'rev', rev })
+  }
 }
 
 const STATUS: Record<ErrorCode, number> = { usage: 400, not_found: 404, conflict: 409, invalid: 422, version: 426, unavailable: 503 }

@@ -63,6 +63,10 @@ export const MIGRATIONS: string[] = [
   FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY status, rank ORDER BY id) AS n FROM tasks WHERE deleted_at IS NULL) AS d
   WHERE tasks.id = d.id AND d.n > 1;
   `,
+  `
+  ALTER TABLE tasks ADD COLUMN client_id TEXT;
+  CREATE UNIQUE INDEX tasks_client_id ON tasks (client_id) WHERE client_id IS NOT NULL;
+  `,
 ]
 
 export function dbPath(): string {

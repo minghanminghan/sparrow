@@ -17,6 +17,15 @@ select {
   background-color: white;
 }
 
+/* iOS Safari zooms into any field under 16px on focus and stays zoomed. Unlayered so it beats text-* utilities. */
+@media (width < 48rem) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 @theme {
   --animate-panel-in: panel-in 200ms ease-out;
   --animate-panel-out: panel-out 200ms ease-in forwards;

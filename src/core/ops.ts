@@ -33,6 +33,7 @@ export type CreateInput = {
   rank?: string
   links?: Link[]
   refs?: Ref[]
+  clientId?: string
 }
 
 export const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -152,6 +153,11 @@ export function applyOp(db: Db, id: string, op: Op): Task {
 export function createTask(db: Db, input: CreateInput): Task {
   const config = loadConfig(db)
   return tx(db, () => {
+    if (input.clientId) {
+      const row = db.prepare('SELECT id, deleted_at FROM tasks WHERE client_id = ?').get(input.clientId) as { id: number; deleted_at: string | null } | undefined
+      if (row?.deleted_at) throw new KbError('not_found', `task ${row.id} not found`)
+      if (row) return readTask(db, String(row.id))
+    }
     if (input.parent) readTask(db, input.parent)
     const status = input.status ?? columnByRole(config, 'ready').key
     const at = now()
@@ -174,6 +180,7 @@ export function createTask(db: Db, input: CreateInput): Task {
     setStatus(config, task, status, at)
     task.rank = input.rank ?? rankAtEnd(db, status)
     task.id = saveTask(db, task)
+    if (input.clientId) db.prepare('UPDATE tasks SET client_id = ? WHERE id = ?').run(input.clientId, task.id)
     return task
   })
 }
