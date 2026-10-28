@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { Link, Ref } from '@/core'
 import { rankBetween } from '@/core/rank'
@@ -12,6 +12,15 @@ import { LINK_TYPES, LinkPicker } from '@/components/detail/TaskDetail'
 type Photo = { file: File; url: string }
 
 const FIELD = 'rounded border border-gray-300 px-2 py-1 text-sm'
+
+// Below Tailwind's `md` breakpoint the form is a full-screen page with its own layout.
+const PHONE_QUERY = '(width < 48rem)'
+
+function subscribePhone(onChange: () => void): () => void {
+  const mq = window.matchMedia(PHONE_QUERY)
+  mq.addEventListener('change', onChange)
+  return () => mq.removeEventListener('change', onChange)
+}
 
 export function QuickCreate() {
   const createFor = useKb((s) => s.createFor)
@@ -34,6 +43,7 @@ export function QuickCreate() {
   const photosRef = useRef<Photo[]>([])
   const pending = useRef<Promise<unknown>>(Promise.resolve())
   const generation = useRef(0)
+  const phone = useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE_QUERY).matches, () => false)
 
   useEffect(() => {
     if (!createFor) return
@@ -136,6 +146,178 @@ export function QuickCreate() {
     }
   }
 
+  const titleInput = (
+    <input
+      ref={titleRef}
+      value={title}
+      onChange={(e) => setTitle(e.target.value)}
+      onKeyDown={(e) => {
+        // ⌘Enter bubbles to the dialog's handler; submitting here too made two tasks.
+        if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+          e.preventDefault()
+          void submit()
+        }
+      }}
+      placeholder="Task title"
+      className="w-full border-b border-gray-300 pb-2 text-lg outline-none"
+    />
+  )
+
+  const statusSelect = (
+    <select value={status} onChange={(e) => setStatus(e.target.value)} className={FIELD}>
+      <option value="">Default status</option>
+      {columns?.map((c) => (
+        <option key={c.key} value={c.key}>
+          {c.name}
+        </option>
+      ))}
+    </select>
+  )
+
+  const dueInput = <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={FIELD} />
+  const assigneeInput = (
+    <input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="Unassigned" className={FIELD} />
+  )
+  const parentInput = (
+    <input
+      value={parent}
+      onChange={(e) => setParent(e.target.value)}
+      placeholder="Parent ID (optional)"
+      className={`flex-1 ${FIELD}`}
+    />
+  )
+
+  const photoRow = (
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="cursor-pointer rounded border border-gray-300 px-2 py-1 text-xs text-gray-600">
+        📷 Photo
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            addPhotos(e.target.files)
+            e.target.value = ''
+          }}
+        />
+      </label>
+      {photos.map((p) => (
+        <span key={p.url} className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={p.url} alt="" className="h-12 w-12 rounded border border-gray-200 object-cover" />
+          <button
+            type="button"
+            onClick={() => removePhoto(p)}
+            aria-label="Remove photo"
+            className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900 text-xs leading-none text-white"
+          >
+            ×
+          </button>
+        </span>
+      ))}
+    </div>
+  )
+
+  const bodyInput = (
+    <textarea
+      value={body}
+      onChange={(e) => setBody(e.target.value)}
+      placeholder={phone ? 'Notes' : undefined}
+      className="field-sizing-content min-h-24 w-full rounded border border-gray-300 p-2 text-sm outline-none"
+    />
+  )
+
+  const linksSection = (
+    <section>
+      <h2 className="mb-2 text-sm font-semibold text-gray-700">Links</h2>
+      <ul className="mb-1 space-y-0.5 text-sm">
+        {links.map((l) => (
+          <li key={`${l.type}-${l.id}`} className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">{LINK_TYPES.find((o) => o.value === l.type)?.label}</span>
+            {l.id} — {byId[l.id]?.title}
+            <button
+              onClick={() => setLinks(links.filter((x) => x !== l))}
+              aria-label="Remove link"
+              className="text-gray-400 hover:text-gray-700"
+            >
+              ×
+            </button>
+          </li>
+        ))}
+      </ul>
+      <LinkPicker
+        onAdd={(link) => {
+          if (!links.some((l) => l.type === link.type && l.id === link.id)) setLinks([...links, link])
+        }}
+      />
+    </section>
+  )
+
+  const refsSection = (
+    <section>
+      <h2 className="mb-2 text-sm font-semibold text-gray-700">References</h2>
+      <ul className="mb-1 space-y-0.5 text-sm">
+        {refs.map((r) => (
+          <li key={r.url} className="flex items-center gap-2">
+            <span className="truncate">{r.url}</span>
+            <button
+              onClick={() => setRefs(refs.filter((x) => x !== r))}
+              aria-label="Remove reference"
+              className="text-gray-400 hover:text-gray-700"
+            >
+              ×
+            </button>
+          </li>
+        ))}
+      </ul>
+      <input
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            addRef()
+          }
+        }}
+        placeholder="Paste a URL…"
+        className="w-full rounded border border-gray-200 px-2 py-1 text-sm outline-none focus:border-gray-400"
+      />
+    </section>
+  )
+
+  if (phone) {
+    return (
+      <div className="fixed inset-0 z-40 flex flex-col bg-white" onKeyDown={onKeyDown}>
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2">
+          <button onClick={onClose} className="text-sm text-gray-500">
+            Cancel
+          </button>
+          <span className="text-sm font-medium">New task</span>
+          <button onClick={() => void submit()} className="rounded bg-gray-900 px-3 py-1 text-sm text-white">
+            Create
+          </button>
+        </div>
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+          {titleInput}
+          {bodyInput}
+          {photoRow}
+          {statusSelect}
+          <details>
+            <summary className="cursor-pointer text-sm text-gray-500">More</summary>
+            <div className="mt-3 flex flex-col gap-3">
+              {parentInput}
+              {dueInput}
+              {assigneeInput}
+              {linksSection}
+              {refsSection}
+            </div>
+          </details>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/20 pt-24" onClick={onClose}>
       <div
@@ -143,131 +325,24 @@ export function QuickCreate() {
         onClick={(e) => e.stopPropagation()}
         onKeyDown={onKeyDown}
       >
-        <input
-          ref={titleRef}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => {
-            // ⌘Enter bubbles to the dialog's handler; submitting here too made two tasks.
-            if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
-              e.preventDefault()
-              void submit()
-            }
-          }}
-          placeholder="Task title"
-          className="w-full border-b border-gray-300 pb-2 text-lg outline-none"
-        />
+        {titleInput}
         <div className="flex flex-wrap gap-2">
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className={FIELD}>
-            <option value="">Default status</option>
-            {columns?.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={FIELD} />
-          <input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="Unassigned" className={FIELD} />
-          <input
-            value={parent}
-            onChange={(e) => setParent(e.target.value)}
-            placeholder="Parent ID (optional)"
-            className={`flex-1 ${FIELD}`}
-          />
+          {statusSelect}
+          {dueInput}
+          {assigneeInput}
+          {parentInput}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="cursor-pointer rounded border border-gray-300 px-2 py-1 text-xs text-gray-600">
-            📷 Photo
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                addPhotos(e.target.files)
-                e.target.value = ''
-              }}
-            />
-          </label>
-          {photos.map((p) => (
-            <span key={p.url} className="relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.url} alt="" className="h-12 w-12 rounded border border-gray-200 object-cover" />
-              <button
-                type="button"
-                onClick={() => removePhoto(p)}
-                aria-label="Remove photo"
-                className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900 text-xs leading-none text-white"
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
+        {photoRow}
 
         <section>
           <h2 className="mb-2 text-sm font-semibold text-gray-700">Description</h2>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            className="field-sizing-content min-h-24 w-full rounded border border-gray-300 p-2 text-sm outline-none"
-          />
+          {bodyInput}
         </section>
 
-        <section>
-          <h2 className="mb-2 text-sm font-semibold text-gray-700">Links</h2>
-          <ul className="mb-1 space-y-0.5 text-sm">
-            {links.map((l) => (
-              <li key={`${l.type}-${l.id}`} className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">{LINK_TYPES.find((o) => o.value === l.type)?.label}</span>
-                {l.id} — {byId[l.id]?.title}
-                <button
-                  onClick={() => setLinks(links.filter((x) => x !== l))}
-                  aria-label="Remove link"
-                  className="text-gray-400 hover:text-gray-700"
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-          <LinkPicker
-            onAdd={(link) => {
-              if (!links.some((l) => l.type === link.type && l.id === link.id)) setLinks([...links, link])
-            }}
-          />
-        </section>
+        {linksSection}
 
-        <section>
-          <h2 className="mb-2 text-sm font-semibold text-gray-700">References</h2>
-          <ul className="mb-1 space-y-0.5 text-sm">
-            {refs.map((r) => (
-              <li key={r.url} className="flex items-center gap-2">
-                <span className="truncate">{r.url}</span>
-                <button
-                  onClick={() => setRefs(refs.filter((x) => x !== r))}
-                  aria-label="Remove reference"
-                  className="text-gray-400 hover:text-gray-700"
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                addRef()
-              }
-            }}
-            placeholder="Paste a URL…"
-            className="w-full rounded border border-gray-200 px-2 py-1 text-sm outline-none focus:border-gray-400"
-          />
-        </section>
+        {refsSection}
 
         <div className="flex items-center justify-end gap-3">
           <span className="text-xs text-gray-400">⌘Enter to create</span>

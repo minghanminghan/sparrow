@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useKb } from '@/client/store'
 import { Filters } from './Filters'
+import { FilterSheet } from './mobile/FilterSheet'
 import { OfflineBar } from './OfflineBar'
 import { QuickCreate } from './QuickCreate'
 import { TaskPanel } from './TaskPanel'
@@ -30,6 +31,13 @@ export function Shell({ children }: { children: ReactNode }) {
   const dismissToast = useKb((s) => s.dismissToast)
   const openCreate = useKb((s) => s.openCreate)
   const searchRef = useRef<HTMLInputElement>(null)
+  const filtered = useKb((s) => {
+    const f = s.filters
+    return Boolean(f.q || f.hideSubtasks || f.assignee || f.due || f.showDone)
+  })
+  const [filterOpen, setFilterOpen] = useState(false)
+  // Only the board has a phone layout; other pages keep the desktop header at every width.
+  const phone = pathname === '/'
 
   useEffect(() => {
     connect()
@@ -59,7 +67,16 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen flex-col">
       <OfflineBar />
-      <header className="flex flex-wrap items-center gap-4 border-b border-gray-200 px-4 py-2">
+      {phone && (
+        <header className="flex items-center justify-between border-b border-gray-200 px-4 py-2 md:hidden">
+          <h1 className="text-sm font-medium text-gray-900">Board</h1>
+          <button onClick={() => setFilterOpen(true)} className="flex items-center gap-1 text-sm text-gray-600">
+            Filter
+            {filtered && <span className="h-1.5 w-1.5 rounded-full bg-gray-900" />}
+          </button>
+        </header>
+      )}
+      <header className={`${phone ? 'hidden md:flex' : 'flex'} flex-wrap items-center gap-4 border-b border-gray-200 px-4 py-2`}>
         <nav className="flex gap-3 text-sm font-medium">
           <Link href="/" className={pathname === '/' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'}>
             Board
@@ -93,6 +110,7 @@ export function Shell({ children }: { children: ReactNode }) {
       </div>
 
       <QuickCreate />
+      <FilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} />
 
       <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
         {toasts.map((t) => (

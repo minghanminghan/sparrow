@@ -2,6 +2,7 @@ import { isDone } from '@/core/columns'
 import type { Index, TaskView } from '@/core'
 import { applyFilters } from '@/client/store'
 import type { Filters } from '@/client/store'
+import type { OutboxEntry } from '@/client/outbox'
 
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000
 
@@ -18,4 +19,9 @@ export function visibleColumnTasks(index: Index, filters: Filters, columnKey: st
     tasks = tasks.filter((t) => recentlyCompleted(t.completed))
   }
   return tasks
+}
+
+/** Outbox entries shown as pending cards in a column: not yet created, or failed. */
+export function pendingForColumn(pending: OutboxEntry[], readyKey: string | undefined, columnKey: string): OutboxEntry[] {
+  return pending.filter((e) => (!e.taskId || e.error) && (e.input.status ?? readyKey) === columnKey)
 }

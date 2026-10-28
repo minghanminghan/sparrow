@@ -8,7 +8,7 @@ import { columnByRole } from '@/core/columns'
 import { useKb } from '@/client/store'
 import { PendingCard } from '@/components/PendingCard'
 import { Card } from './Card'
-import { visibleColumnTasks } from './visibleTasks'
+import { pendingForColumn, visibleColumnTasks } from './visibleTasks'
 
 const EMPTY_IDS: string[] = []
 
@@ -25,7 +25,7 @@ export function Column({ column }: { column: ColumnConfig }) {
 
   const pending = useKb((s) => s.pending)
   const readyKey = useKb((s) => (s.index ? columnByRole(s.index.config, 'ready').key : undefined))
-  const mine = pending.filter((e) => (!e.taskId || e.error) && (e.input.status ?? readyKey) === column.key)
+  const mine = pendingForColumn(pending, readyKey, column.key)
 
   return (
     <div
