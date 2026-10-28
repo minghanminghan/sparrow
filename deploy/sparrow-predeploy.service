@@ -1,0 +1,28 @@
+# Template: deploy/setup.sh fills in @NODE_BIN@ and installs it to /etc/systemd/system.
+# Started by deploy/deploy.sh: backs up the DB, then migrates it with the new build at /opt/sparrow/next.
+[Unit]
+Description=sparrow pre-deploy DB backup and migration
+
+[Service]
+Type=oneshot
+User=sparrow
+Group=sparrow
+WorkingDirectory=/opt/sparrow/next
+Environment=SPARROW_DB=/var/lib/sparrow/sparrow.db
+Environment=SPARROW_ATTACHMENTS=/var/lib/sparrow/attachments
+Environment=SPARROW_BACKUPS=/var/backups/sparrow
+ExecStart=@NODE_BIN@ dist/backup.js --backup-only
+ExecStart=@NODE_BIN@ dist/migrate.js
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+PrivateNetwork=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/sparrow /var/backups/sparrow
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
