@@ -14,7 +14,6 @@ import {
 export type Filters = {
   q: string
   hideSubtasks: boolean
-  project?: string
   assignee?: string
   due?: 'overdue' | 'week'
   showDone: boolean
@@ -226,18 +225,8 @@ function todayLocalDay(): number {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
 }
 
-function descendantsOf(tasks: TaskView[], rootId: string): Set<string> {
-  const byId = new Map(tasks.map((t) => [t.id, t]))
-  const keep = new Set<string>()
-  const stack = [rootId]
-  while (stack.length > 0) {
-    const id = stack.pop() as string
-    if (keep.has(id)) continue
-    keep.add(id)
-    const t = byId.get(id)
-    if (t) stack.push(...t.children)
-  }
-  return keep
+export function assigneesOf(tasks: TaskView[]): string[] {
+  return [...new Set(tasks.flatMap((t) => (t.assignee ? [t.assignee] : [])))].sort((a, b) => a.localeCompare(b))
 }
 
 // showDone is always applied here; the board (Task 8) handles its own
@@ -250,11 +239,6 @@ export function applyFilters(tasks: TaskView[], f: Filters, config: Config): Tas
   if (q) result = result.filter((t) => t.id.toLowerCase().includes(q) || t.title.toLowerCase().includes(q))
 
   if (f.hideSubtasks) result = result.filter((t) => !t.parent)
-
-  if (f.project) {
-    const keep = descendantsOf(tasks, f.project)
-    result = result.filter((t) => keep.has(t.id))
-  }
 
   if (f.assignee) result = result.filter((t) => t.assignee === f.assignee)
 
