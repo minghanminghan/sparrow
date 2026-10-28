@@ -105,3 +105,10 @@ test('createTask with the same clientId returns the first task', () => {
 test('createTask without clientId always creates', () => {
   expect(createTask(db, { title: 'y' }).id).not.toBe(createTask(db, { title: 'y' }).id)
 })
+
+test('createTask retried after its task was deleted is not_found and makes no task', () => {
+  const a = createTask(db, { title: 'z', clientId: 'c2' })
+  deleteTask(db, a.id)
+  expect(code(() => createTask(db, { title: 'z', clientId: 'c2' }))).toBe('not_found')
+  expect(buildIndex(db).tasks.filter((t) => t.title === 'z')).toHaveLength(0)
+})
