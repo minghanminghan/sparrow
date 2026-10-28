@@ -44,6 +44,6 @@ describe('state', () => {
     state.db.prepare('UPDATE config SET value = ? WHERE id = 1').run(JSON.stringify(config))
     refresh(state)
     expect(state.rev).not.toBe(before)
-    expect(events).toEqual([{ type: 'rev', rev: state.rev }])
+    expect(events).toEqual([{ type: 'snapshot', index: state.index, rev: state.rev }])
   })
 })

@@ -9,7 +9,7 @@ function age(ms: number): string {
 }
 
 export function OfflineBar() {
-  const connected = useKb((s) => s.connected)
+  const offline = useKb((s) => s.offline)
   const savedAt = useKb((s) => s.savedAt)
   const [now, setNow] = useState(() => Date.now())
 
@@ -18,7 +18,7 @@ export function OfflineBar() {
     return () => clearInterval(id)
   }, [])
 
-  if (connected || !savedAt) return null
+  if (!offline || !savedAt) return null
   return (
     <div className="bg-amber-50 px-3 py-1 text-[11px] text-amber-800">
       Offline · tasks from {age(now - savedAt)} ago

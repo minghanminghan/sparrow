@@ -27,6 +27,7 @@ type KbStore = {
   index: Index | null
   byId: Record<string, TaskView>
   connected: boolean
+  offline: boolean
   savedAt: number | null
   rev: string | null
   filters: Filters
@@ -49,6 +50,7 @@ type KbStore = {
 let eventSource: EventSource | null = null
 let connecting = false
 const RECONNECT_MS = 3000
+const CACHE_TIMEOUT_MS = 1000
 const TOAST_MS = 6000
 
 function sortByRank(tasks: TaskView[]): TaskView[] {
@@ -94,6 +96,7 @@ export const useKb = create<KbStore>()((set, get) => {
     index: null,
     byId: {},
     connected: false,
+    offline: false,
     savedAt: null,
     rev: null,
     filters: { q: '', hideSubtasks: false, showDone: false },
@@ -114,9 +117,9 @@ export const useKb = create<KbStore>()((set, get) => {
         const rev = get().rev
         const es = new EventSource('/api/events' + (rev ? '?rev=' + encodeURIComponent(rev) : ''))
         eventSource = es
-        es.onopen = () => set({ connected: true })
+        es.onopen = () => set({ connected: true, offline: false })
         es.onerror = () => {
-          set({ connected: false })
+          set({ connected: false, offline: true })
           es.close()
           setTimeout(open, RECONNECT_MS)
         }
@@ -165,7 +168,10 @@ export const useKb = create<KbStore>()((set, get) => {
         }
       }
 
-      void loadCachedIndex().then((c) => {
+      let opened = false
+      function start(c: Awaited<ReturnType<typeof loadCachedIndex>>): void {
+        if (opened) return
+        opened = true
         if (c && !get().index) {
           for (const t of c.index.tasks) confirmed[t.id] = t
           set({
@@ -176,7 +182,10 @@ export const useKb = create<KbStore>()((set, get) => {
           })
         }
         open()
-      })
+      }
+      // IndexedDB can hang (Safari); never let it block the connection.
+      void loadCachedIndex().then(start)
+      setTimeout(() => start(null), CACHE_TIMEOUT_MS)
     },
 
     async op(id, opArg, optimistic) {
