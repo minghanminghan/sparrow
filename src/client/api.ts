@@ -41,10 +41,10 @@ export function removeTask(id: string): Promise<{ ok: true }> {
   return fetch(`/api/tasks/${id}`, { method: 'DELETE', headers: HEADERS }).then((res) => handle<{ ok: true }>(res))
 }
 
-export function uploadAttachment(id: string, file: File): Promise<TaskView> {
+export function uploadAttachment(id: string, file: File, signal?: AbortSignal): Promise<TaskView> {
   const form = new FormData()
   form.append('file', file)
-  return fetch(`/api/tasks/${id}/attachments`, { method: 'POST', body: form }).then((res) => handle<TaskView>(res))
+  return fetch(`/api/tasks/${id}/attachments`, { method: 'POST', body: form, signal }).then((res) => handle<TaskView>(res))
 }
 
 export function removeAttachment(id: string, attId: string): Promise<TaskView> {

@@ -13,10 +13,11 @@ export type OutboxEntry = {
 
 export type OutboxDeps = {
   createTask(input: CreateInput, signal: AbortSignal): Promise<TaskView>
-  uploadAttachment(id: string, file: File): Promise<TaskView>
+  uploadAttachment(id: string, file: File, signal: AbortSignal): Promise<TaskView>
 }
 
 export const CREATE_TIMEOUT_MS = 8000
+export const UPLOAD_TIMEOUT_MS = 30000
 
 const KEY = 'outbox'
 
@@ -25,17 +26,17 @@ export function isNetworkError(err: unknown): boolean {
   return err instanceof TypeError || (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError'))
 }
 
-async function createWithTimeout(input: CreateInput, deps: OutboxDeps): Promise<TaskView> {
+async function withTimeout<T>(ms: number, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
   const aborted = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       controller.abort()
       reject(new DOMException('Timed out', 'TimeoutError'))
-    }, CREATE_TIMEOUT_MS)
+    }, ms)
   })
   try {
-    return await Promise.race([deps.createTask(input, controller.signal), aborted])
+    return await Promise.race([run(controller.signal), aborted])
   } finally {
     clearTimeout(timer)
   }
@@ -44,16 +45,18 @@ async function createWithTimeout(input: CreateInput, deps: OutboxDeps): Promise<
 export async function flushEntry(
   e: OutboxEntry,
   deps: OutboxDeps,
-): Promise<{ entry: OutboxEntry | null; task?: TaskView }> {
+): Promise<{ entry: OutboxEntry | null; task?: TaskView; cause?: unknown }> {
   let entry = e
   let task: TaskView | undefined
   function fail(err: unknown) {
     const next = isNetworkError(err) ? entry : { ...entry, error: err instanceof Error ? err.message : String(err) }
-    return { entry: next, task }
+    return { entry: next, task, cause: err }
   }
   if (!entry.taskId) {
     try {
-      task = await createWithTimeout({ ...entry.input, clientId: entry.clientId }, deps)
+      task = await withTimeout(CREATE_TIMEOUT_MS, (signal) =>
+        deps.createTask({ ...entry.input, clientId: entry.clientId }, signal),
+      )
     } catch (err) {
       return fail(err)
     }
@@ -62,7 +65,8 @@ export async function flushEntry(
   while (entry.photos.length) {
     const [photo, ...rest] = entry.photos
     try {
-      task = await deps.uploadAttachment(entry.taskId!, new File([photo.blob], photo.name, { type: photo.blob.type }))
+      const file = new File([photo.blob], photo.name, { type: photo.blob.type })
+      task = await withTimeout(UPLOAD_TIMEOUT_MS, (signal) => deps.uploadAttachment(entry.taskId!, file, signal))
     } catch (err) {
       return fail(err)
     }

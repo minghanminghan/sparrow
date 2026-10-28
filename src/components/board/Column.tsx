@@ -25,7 +25,7 @@ export function Column({ column }: { column: ColumnConfig }) {
 
   const pending = useKb((s) => s.pending)
   const readyKey = useKb((s) => (s.index ? columnByRole(s.index.config, 'ready').key : undefined))
-  const mine = pending.filter((e) => (e.input.status ?? readyKey) === column.key)
+  const mine = pending.filter((e) => (!e.taskId || e.error) && (e.input.status ?? readyKey) === column.key)
 
   return (
     <div

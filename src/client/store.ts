@@ -94,18 +94,19 @@ export const useKb = create<KbStore>()((set, get) => {
     set({ byId: { ...get().byId, [task.id]: task }, index: index ? replaceTask(index, task) : index })
   }
 
+  let loaded: Promise<void> = Promise.resolve()
   let outboxReady: Promise<void> = Promise.resolve()
   let flushing = false
+  let flushAgain = false
 
-  // Waits for the stored outbox to load first so a save never overwrites it.
-  async function setPending(update: (p: OutboxEntry[]) => OutboxEntry[]): Promise<void> {
+  // Saves wait for the real load so stored entries are never overwritten; never awaited by callers.
+  function setPending(update: (p: OutboxEntry[]) => OutboxEntry[]): void {
     set((s) => ({ pending: update(s.pending) }))
-    await outboxReady
-    await saveOutbox(get().pending)
+    void loaded.then(() => saveOutbox(get().pending))
   }
 
-  function replacePending(clientId: string, next: OutboxEntry | null): Promise<void> {
-    return setPending((p) => p.flatMap((e) => (e.clientId !== clientId ? [e] : next ? [next] : [])))
+  function replacePending(clientId: string, next: OutboxEntry | null): void {
+    setPending((p) => p.flatMap((e) => (e.clientId !== clientId ? [e] : next ? [next] : [])))
   }
 
   async function settle(request: Promise<TaskView>): Promise<void> {
@@ -135,9 +136,10 @@ export const useKb = create<KbStore>()((set, get) => {
     connect() {
       if (eventSource || connecting) return
       connecting = true
-      outboxReady = loadOutbox().then((stored) =>
+      loaded = loadOutbox().then((stored) =>
         set((s) => ({ pending: [...stored.filter((e) => !s.pending.some((x) => x.clientId === e.clientId)), ...s.pending] })),
       )
+      outboxReady = Promise.race([loaded, new Promise<void>((r) => setTimeout(r, CACHE_TIMEOUT_MS))])
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible' && get().connected) void get().flushOutbox()
       })
@@ -275,46 +277,53 @@ export const useKb = create<KbStore>()((set, get) => {
         createdAt: Date.now(),
       }
       if (!get().connected) {
-        await setPending((p) => [...p, entry])
+        setPending((p) => [...p, entry])
         return null
       }
-      const { entry: left, task } = await flushEntry(entry, outboxDeps)
+      const { entry: left, task, cause } = await flushEntry(entry, outboxDeps)
       if (task) merge(task)
       if (!left) return task ?? null
       if (left.error) {
         pushToast(left.error)
-        if (!task) throw new Error(left.error)
+        if (!task) throw cause
         return task
       }
-      await setPending((p) => [...p, left])
+      setPending((p) => [...p, left])
+      void get().flushOutbox()
       return task ?? null
     },
 
     async flushOutbox() {
-      if (flushing) return
+      if (flushing) {
+        flushAgain = true
+        return
+      }
       flushing = true
       try {
         await outboxReady
-        for (const e of get().pending) {
-          if (e.error) continue
-          if (!get().connected) break
-          const { entry: left, task } = await flushEntry(e, outboxDeps)
-          if (task) merge(task)
-          await replacePending(e.clientId, left)
-          if (left && !left.error) break
-        }
+        do {
+          flushAgain = false
+          for (const e of get().pending) {
+            if (e.error) continue
+            if (!get().connected) break
+            const { entry: left, task } = await flushEntry(e, outboxDeps)
+            if (task) merge(task)
+            replacePending(e.clientId, left)
+            if (left && !left.error) break
+          }
+        } while (flushAgain)
       } finally {
         flushing = false
       }
     },
 
     async retryPending(clientId) {
-      await setPending((p) => p.map((e) => (e.clientId === clientId ? { ...e, error: undefined } : e)))
+      setPending((p) => p.map((e) => (e.clientId === clientId ? { ...e, error: undefined } : e)))
       await get().flushOutbox()
     },
 
-    discardPending(clientId) {
-      return replacePending(clientId, null)
+    async discardPending(clientId) {
+      replacePending(clientId, null)
     },
 
     async remove(id) {

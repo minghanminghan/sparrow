@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TaskView } from '@/core'
 import { ApiError } from './api'
-import { CREATE_TIMEOUT_MS, flushEntry, type OutboxDeps, type OutboxEntry } from './outbox'
+import { CREATE_TIMEOUT_MS, UPLOAD_TIMEOUT_MS, flushEntry, type OutboxDeps, type OutboxEntry } from './outbox'
 
 const task = { id: 'T-1', title: 'x' } as TaskView
 const entry = (over: Partial<OutboxEntry> = {}): OutboxEntry => ({
@@ -63,6 +63,16 @@ describe('flushEntry', () => {
     await vi.advanceTimersByTimeAsync(CREATE_TIMEOUT_MS)
     const r = await p
     expect(r.entry).not.toBeNull()
+    expect(r.entry?.error).toBeUndefined()
+  })
+
+  it('upload keeps taskId after UPLOAD_TIMEOUT_MS', async () => {
+    vi.useFakeTimers()
+    const d = deps({ uploadAttachment: vi.fn(() => new Promise<TaskView>(() => {})) })
+    const p = flushEntry(entry({ photos: [{ name: 'a.png', blob: new Blob(['a']) }] }), d)
+    await vi.advanceTimersByTimeAsync(UPLOAD_TIMEOUT_MS)
+    const r = await p
+    expect(r.entry?.taskId).toBe('T-1')
     expect(r.entry?.error).toBeUndefined()
   })
 })
