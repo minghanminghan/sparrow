@@ -17,6 +17,7 @@ export function QuickCreate() {
   const columns = useKb((s) => s.index?.config.columns)
   const byId = useKb((s) => s.byId)
   const titleRef = useRef<HTMLInputElement>(null)
+  const submitting = useRef(false)
   const [title, setTitle] = useState('')
   const [status, setStatus] = useState('')
   const [parent, setParent] = useState('')
@@ -59,7 +60,8 @@ export function QuickCreate() {
 
   async function submit(): Promise<void> {
     const t = title.trim()
-    if (!t) return
+    if (!t || submitting.current) return
+    submitting.current = true
     // Opened from a column: put the new task at the top of it, like the old inline input did.
     const state = useKb.getState()
     const first =
@@ -81,6 +83,8 @@ export function QuickCreate() {
       close()
     } catch {
       // the store already pushed a toast with the error
+    } finally {
+      submitting.current = false
     }
   }
 
@@ -113,7 +117,8 @@ export function QuickCreate() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            // ⌘Enter bubbles to the dialog's handler; submitting here too made two tasks.
+            if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
               e.preventDefault()
               void submit()
             }

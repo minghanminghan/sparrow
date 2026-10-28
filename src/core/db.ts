@@ -56,6 +56,13 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX attachments_task ON attachments (task_id);
   `,
+  // Status changes used to keep the old column's rank, leaving ties that break drag and drop.
+  // Suffix each tie after the first so it sorts just after it and before the next rank.
+  `
+  UPDATE tasks SET rank = rank || substr('123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', d.n - 1, 1)
+  FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY status, rank ORDER BY id) AS n FROM tasks WHERE deleted_at IS NULL) AS d
+  WHERE tasks.id = d.id AND d.n > 1;
+  `,
 ]
 
 export function dbPath(): string {

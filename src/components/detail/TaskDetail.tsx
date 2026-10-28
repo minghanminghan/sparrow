@@ -111,7 +111,7 @@ function TitleEditor({ task, fullPage }: { task: TaskView; fullPage: boolean }) 
     return (
       <h1
         onClick={() => startEdit(task.title, task.titleHash)}
-        className="cursor-text text-xl font-semibold text-gray-900"
+        className="cursor-text text-xl font-semibold wrap-break-word text-gray-900"
       >
         {fullPage ? (
           task.title
@@ -156,16 +156,20 @@ function TitleEditor({ task, fullPage }: { task: TaskView; fullPage: boolean }) 
   }
 
   return (
-    <input
+    // A textarea so long titles wrap while editing; Enter still saves instead of adding a newline.
+    <textarea
       autoFocus
+      rows={1}
       value={state.draft}
-      onChange={(e) => startEdit(e.target.value, state.baseHash)}
+      onChange={(e) => startEdit(e.target.value.replace(/\n/g, ' '), state.baseHash)}
       onBlur={commit}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') e.currentTarget.blur()
-        else if (e.key === 'Escape') discard()
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          e.currentTarget.blur()
+        } else if (e.key === 'Escape') discard()
       }}
-      className="w-full rounded border border-gray-300 px-2 py-1 text-xl font-semibold outline-none"
+      className="field-sizing-content w-full resize-none rounded border border-gray-300 px-2 py-1 text-xl font-semibold wrap-break-word outline-none"
     />
   )
 }
