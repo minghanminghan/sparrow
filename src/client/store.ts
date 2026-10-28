@@ -10,6 +10,8 @@ import {
   removeTask as apiRemoveTask,
   uploadAttachment as apiUploadAttachment,
 } from './api'
+import { loadCachedIndex, saveCachedIndex } from './cache'
+import { VERSION } from '@/core/version'
 
 export type Filters = {
   q: string
@@ -24,6 +26,9 @@ type Toast = { id: string; message: string }
 type KbStore = {
   index: Index | null
   byId: Record<string, TaskView>
+  connected: boolean
+  savedAt: number | null
+  rev: string | null
   filters: Filters
   panelId: string | null
   // Non-null while the new-task modal is open; `status` is set when opened from a board column.
@@ -42,6 +47,8 @@ type KbStore = {
 }
 
 let eventSource: EventSource | null = null
+let connecting = false
+const RECONNECT_MS = 3000
 const TOAST_MS = 6000
 
 function sortByRank(tasks: TaskView[]): TaskView[] {
@@ -86,40 +93,90 @@ export const useKb = create<KbStore>()((set, get) => {
   return {
     index: null,
     byId: {},
+    connected: false,
+    savedAt: null,
+    rev: null,
     filters: { q: '', hideSubtasks: false, showDone: false },
     panelId: null,
     createFor: null,
     toasts: [],
 
     connect() {
-      if (eventSource) return
-      eventSource = new EventSource('/api/events')
-      eventSource.onmessage = (ev: MessageEvent<string>) => {
-        const event = JSON.parse(ev.data) as ServerEvent
-        if (event.type === 'snapshot') {
-          for (const t of event.index.tasks) confirmed[t.id] = t
-          set({ index: event.index, byId: Object.fromEntries(event.index.tasks.map((t) => [t.id, t])) })
-          return
+      if (eventSource || connecting) return
+      connecting = true
+
+      function save(): void {
+        const { index, rev, savedAt } = get()
+        if (index && rev && savedAt) void saveCachedIndex({ index, rev, savedAt, version: VERSION })
+      }
+
+      function open(): void {
+        const rev = get().rev
+        const es = new EventSource('/api/events' + (rev ? '?rev=' + encodeURIComponent(rev) : ''))
+        eventSource = es
+        es.onopen = () => set({ connected: true })
+        es.onerror = () => {
+          set({ connected: false })
+          es.close()
+          setTimeout(open, RECONNECT_MS)
         }
-        const index = get().index
-        if (!index) return
-        if (event.type === 'upsert') {
-          // An in-flight op for this task will overwrite byId with its own
-          // POST response when it settles, so an update here would either be
-          // redundant or, worse, clobber a newer optimistic write.
-          if ((inFlight[event.task.id] ?? 0) > 0) return
-          const prev = get().byId[event.task.id]
-          if (prev && JSON.stringify(prev) === JSON.stringify(event.task)) return
-          confirmed[event.task.id] = event.task
-          set({ index: replaceTask(index, event.task), byId: { ...get().byId, [event.task.id]: event.task } })
-        } else if (event.type === 'remove') {
-          delete confirmed[event.id]
-          delete inFlight[event.id]
-          const byId = { ...get().byId }
-          delete byId[event.id]
-          set({ index: removeFromIndex(index, event.id), byId })
+        es.onmessage = (ev: MessageEvent<string>) => {
+          const event = JSON.parse(ev.data) as ServerEvent
+          if (event.type === 'snapshot') {
+            for (const t of event.index.tasks) confirmed[t.id] = t
+            set({
+              index: event.index,
+              byId: Object.fromEntries(event.index.tasks.map((t) => [t.id, t])),
+              rev: event.rev,
+              savedAt: Date.now(),
+              connected: true,
+            })
+            save()
+            return
+          }
+          if (event.type === 'unchanged') {
+            set({ connected: true, savedAt: Date.now() })
+            save()
+            return
+          }
+          if (event.type === 'rev') {
+            set({ rev: event.rev, savedAt: Date.now() })
+            save()
+            return
+          }
+          const index = get().index
+          if (!index) return
+          if (event.type === 'upsert') {
+            // An in-flight op for this task will overwrite byId with its own
+            // POST response when it settles, so an update here would either be
+            // redundant or, worse, clobber a newer optimistic write.
+            if ((inFlight[event.task.id] ?? 0) > 0) return
+            const prev = get().byId[event.task.id]
+            if (prev && JSON.stringify(prev) === JSON.stringify(event.task)) return
+            confirmed[event.task.id] = event.task
+            set({ index: replaceTask(index, event.task), byId: { ...get().byId, [event.task.id]: event.task } })
+          } else if (event.type === 'remove') {
+            delete confirmed[event.id]
+            delete inFlight[event.id]
+            const byId = { ...get().byId }
+            delete byId[event.id]
+            set({ index: removeFromIndex(index, event.id), byId })
+          }
         }
       }
+
+      void loadCachedIndex().then((c) => {
+        if (c && !get().index) {
+          for (const t of c.index.tasks) confirmed[t.id] = t
+          set({
+            index: c.index,
+            byId: Object.fromEntries(c.index.tasks.map((t) => [t.id, t])),
+            rev: c.rev,
+            savedAt: c.savedAt,
+          })
+        }
+        open()
+      })
     },
 
     async op(id, opArg, optimistic) {

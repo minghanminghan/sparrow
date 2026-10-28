@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { useKb } from '@/client/store'
 import { Filters } from './Filters'
+import { OfflineBar } from './OfflineBar'
 import { QuickCreate } from './QuickCreate'
 import { TaskPanel } from './TaskPanel'
 
@@ -57,6 +58,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-screen flex-col">
+      <OfflineBar />
       <header className="flex flex-wrap items-center gap-4 border-b border-gray-200 px-4 py-2">
         <nav className="flex gap-3 text-sm font-medium">
           <Link href="/" className={pathname === '/' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'}>
