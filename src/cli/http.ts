@@ -1,5 +1,7 @@
-import { KbError } from '../core'
+import { EXIT, KbError } from '../core/errors'
+import type { ErrorCode } from '../core/errors'
 import { compareVersions, VERSION, VERSION_HEADER } from '../core/version'
+import { serverUrl } from './config'
 
 let warned = false
 
@@ -22,4 +24,38 @@ export function checkServerVersion(server: string | null): void {
     warned = true
     process.stderr.write(`sparrow: cli ${VERSION} differs from server ${server}. Run: sparrow upgrade\n`)
   }
+}
+
+// Calls `path` on the configured server; `raw` skips the version check (for `sparrow upgrade`).
+export async function call(path: string, init: RequestInit = {}, raw = false): Promise<Response> {
+  const base = serverUrl()
+  try {
+    return await (raw ? fetch : request)(base + path, init)
+  } catch (err) {
+    if (err instanceof KbError) throw err
+    const cause = (err as { cause?: { code?: string; message?: string } }).cause
+    const reason = cause?.code ?? cause?.message ?? (err as Error).message
+    throw new KbError(
+      'unavailable',
+      `cannot reach the sparrow server at ${base} (${reason}). Set SPARROW_URL or run: sparrow config set url <URL>`,
+    )
+  }
+}
+
+// Turns an API error body ({ error: { code, message } }) back into the matching KbError.
+export async function toError(res: Response): Promise<Error> {
+  const body = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null
+  const message = body?.error?.message ?? `server returned ${res.status} ${res.statusText}`
+  const code = body?.error?.code
+  return code && code in EXIT ? new KbError(code as ErrorCode, message) : new Error(message)
+}
+
+export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const res = await call(path, init)
+  if (!res.ok) throw await toError(res)
+  return (await res.json()) as T
+}
+
+export function sendJson<T>(path: string, method: string, data: unknown): Promise<T> {
+  return api<T>(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
 }

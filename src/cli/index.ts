@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util'
-import { EXIT, formatSize, KbError } from '../core'
-import type { TaskView } from '../core'
+import { EXIT, KbError } from '../core/errors'
+import type { TaskView } from '../core/indexer'
+import { formatSize } from '../core/mime'
 import { COMMANDS, GLOBAL_FLAGS, runCommand } from './commands'
 import type { CommandResult, FlagDef, HelpValue, Values } from './commands'
 
@@ -80,7 +81,7 @@ function printHelp(value: HelpValue): void {
     return
   }
   const width = Math.max(...value.commands.map((c) => c.name.length))
-  console.log('sparrow: local kanban board CLI\n\nUsage: sparrow [OPTIONS] <COMMAND>\n\nCommands:')
+  console.log('sparrow: kanban board CLI\n\nUsage: sparrow [OPTIONS] <COMMAND>\n\nCommands:')
   for (const c of value.commands) console.log(`  ${c.name.padEnd(width)}  ${c.summary}`)
   console.log()
   printOptions(value.globalFlags)
@@ -106,6 +107,12 @@ function printResult(result: CommandResult, jsonMode: boolean): void {
       return
     case 'deleted':
       console.log(`${result.value.id} deleted`)
+      return
+    case 'config':
+      console.log(`url  ${result.value.url}\nfile ${result.value.file}`)
+      return
+    case 'upgraded':
+      console.log(`sparrow ${result.value.from} -> ${result.value.to} (${result.value.file})`)
       return
     case 'help':
       printHelp(result.value)
