@@ -11,6 +11,7 @@ import {
   uploadAttachment as apiUploadAttachment,
 } from './api'
 import { loadCachedIndex, saveCachedIndex } from './cache'
+import { flushEntry, loadOutbox, saveOutbox, type OutboxDeps, type OutboxEntry } from './outbox'
 import { VERSION } from '@/core/version'
 
 export type Filters = {
@@ -35,9 +36,14 @@ type KbStore = {
   // Non-null while the new-task modal is open; `status` is set when opened from a board column.
   createFor: { status?: string } | null
   toasts: Toast[]
+  pending: OutboxEntry[]
   connect(): void
   op(id: string, op: Op, optimistic?: (t: TaskView) => TaskView): Promise<void>
-  create(input: CreateInput): Promise<TaskView>
+  // null means the task was queued in the outbox to be sent later.
+  create(input: CreateInput, photos?: File[]): Promise<TaskView | null>
+  retryPending(clientId: string): Promise<void>
+  discardPending(clientId: string): Promise<void>
+  flushOutbox(): Promise<void>
   remove(id: string): Promise<void>
   attach(id: string, file: File): Promise<void>
   detach(id: string, attId: string): Promise<void>
@@ -52,6 +58,7 @@ let connecting = false
 const RECONNECT_MS = 3000
 const CACHE_TIMEOUT_MS = 1000
 const TOAST_MS = 6000
+const outboxDeps: OutboxDeps = { createTask: apiCreateTask, uploadAttachment: apiUploadAttachment }
 
 function sortByRank(tasks: TaskView[]): TaskView[] {
   return [...tasks].sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
@@ -81,6 +88,26 @@ export const useKb = create<KbStore>()((set, get) => {
     setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== toast.id) })), TOAST_MS)
   }
 
+  function merge(task: TaskView): void {
+    confirmed[task.id] = task
+    const index = get().index
+    set({ byId: { ...get().byId, [task.id]: task }, index: index ? replaceTask(index, task) : index })
+  }
+
+  let outboxReady: Promise<void> = Promise.resolve()
+  let flushing = false
+
+  // Waits for the stored outbox to load first so a save never overwrites it.
+  async function setPending(update: (p: OutboxEntry[]) => OutboxEntry[]): Promise<void> {
+    set((s) => ({ pending: update(s.pending) }))
+    await outboxReady
+    await saveOutbox(get().pending)
+  }
+
+  function replacePending(clientId: string, next: OutboxEntry | null): Promise<void> {
+    return setPending((p) => p.flatMap((e) => (e.clientId !== clientId ? [e] : next ? [next] : [])))
+  }
+
   async function settle(request: Promise<TaskView>): Promise<void> {
     try {
       const task = await request
@@ -103,10 +130,17 @@ export const useKb = create<KbStore>()((set, get) => {
     panelId: null,
     createFor: null,
     toasts: [],
+    pending: [],
 
     connect() {
       if (eventSource || connecting) return
       connecting = true
+      outboxReady = loadOutbox().then((stored) =>
+        set((s) => ({ pending: [...stored.filter((e) => !s.pending.some((x) => x.clientId === e.clientId)), ...s.pending] })),
+      )
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && get().connected) void get().flushOutbox()
+      })
 
       function save(): void {
         const { index, rev, savedAt } = get()
@@ -117,7 +151,10 @@ export const useKb = create<KbStore>()((set, get) => {
         const rev = get().rev
         const es = new EventSource('/api/events' + (rev ? '?rev=' + encodeURIComponent(rev) : ''))
         eventSource = es
-        es.onopen = () => set({ connected: true, offline: false })
+        es.onopen = () => {
+          set({ connected: true, offline: false })
+          void get().flushOutbox()
+        }
         es.onerror = () => {
           set({ connected: false, offline: true })
           es.close()
@@ -230,17 +267,54 @@ export const useKb = create<KbStore>()((set, get) => {
       }
     },
 
-    async create(input) {
-      try {
-        const task = await apiCreateTask(input)
-        confirmed[task.id] = task
-        const index = get().index
-        set({ byId: { ...get().byId, [task.id]: task }, index: index ? replaceTask(index, task) : index })
-        return task
-      } catch (err) {
-        pushToast(err instanceof Error ? err.message : String(err))
-        throw err
+    async create(input, photos = []) {
+      const entry: OutboxEntry = {
+        clientId: crypto.randomUUID(),
+        input,
+        photos: photos.map((f) => ({ name: f.name, blob: f })),
+        createdAt: Date.now(),
       }
+      if (!get().connected) {
+        await setPending((p) => [...p, entry])
+        return null
+      }
+      const { entry: left, task } = await flushEntry(entry, outboxDeps)
+      if (task) merge(task)
+      if (!left) return task ?? null
+      if (left.error) {
+        pushToast(left.error)
+        if (!task) throw new Error(left.error)
+        return task
+      }
+      await setPending((p) => [...p, left])
+      return task ?? null
+    },
+
+    async flushOutbox() {
+      if (flushing) return
+      flushing = true
+      try {
+        await outboxReady
+        for (const e of get().pending) {
+          if (e.error) continue
+          if (!get().connected) break
+          const { entry: left, task } = await flushEntry(e, outboxDeps)
+          if (task) merge(task)
+          await replacePending(e.clientId, left)
+          if (left && !left.error) break
+        }
+      } finally {
+        flushing = false
+      }
+    },
+
+    async retryPending(clientId) {
+      await setPending((p) => p.map((e) => (e.clientId === clientId ? { ...e, error: undefined } : e)))
+      await get().flushOutbox()
+    },
+
+    discardPending(clientId) {
+      return replacePending(clientId, null)
     },
 
     async remove(id) {

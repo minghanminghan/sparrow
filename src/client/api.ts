@@ -25,9 +25,9 @@ export function fetchIndex(): Promise<Index> {
   return fetch('/api/tasks', { headers: HEADERS }).then((res) => handle<Index>(res))
 }
 
-export function createTask(input: CreateInput): Promise<TaskView> {
-  return fetch('/api/tasks', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(input) }).then((res) =>
-    handle<TaskView>(res),
+export function createTask(input: CreateInput, signal?: AbortSignal): Promise<TaskView> {
+  return fetch('/api/tasks', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(input), signal }).then(
+    (res) => handle<TaskView>(res),
   )
 }
 
