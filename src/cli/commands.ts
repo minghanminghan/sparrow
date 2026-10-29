@@ -8,7 +8,7 @@ import type { CreateInput, Op } from '../core/ops'
 import { rankBetween } from '../core/rank'
 import type { Attachment, LinkType } from '../core/types'
 import { VERSION, VERSION_HEADER } from '../core/version'
-import { configPath, readConfig, serverUrl, writeConfig } from './config'
+import { serverUrl } from './config'
 import { api, call, sendJson, toError } from './http'
 
 export type FlagType = 'string' | 'boolean'
@@ -18,7 +18,7 @@ export type Values = Record<string, string | boolean | undefined>
 
 export const GLOBAL_FLAGS: FlagDef[] = [
   { name: 'json', type: 'boolean', desc: 'force JSON output' },
-  { name: 'env', type: 'string', desc: 'dev (the local `pnpm dev` DB) or prod. Default: SPARROW_URL, then config url' },
+  { name: 'env', type: 'string', desc: 'dev (the local `pnpm dev` DB) or prod. Default: SPARROW_URL, then prod' },
   { name: 'help', short: 'h', type: 'boolean', desc: 'Print help' },
 ]
 
@@ -100,7 +100,7 @@ export const COMMANDS: CommandDef[] = [
     flags: [{ name: 'remove', type: 'boolean', desc: 'remove the attachment with the given id instead' }],
   },
   { name: 'delete', summary: 'Delete a task (soft delete; the id is never reused)', args: '<ID>', flags: [] },
-  { name: 'config', summary: 'Show CLI config, or set the server url', args: '[set url <URL>]', flags: [] },
+  { name: 'config', summary: 'Show the server url', flags: [] },
   { name: 'upgrade', summary: "Replace this CLI with the server's version", flags: [] },
   { name: 'help', summary: 'Print this message or the help of the given command', args: '[COMMAND]', flags: [] },
 ]
@@ -111,7 +111,7 @@ export type CommandResult =
   | { kind: 'tasks'; value: { total: number; tasks: TaskView[] }; offset: number; lines: { task: TaskView; depth: number }[] }
   | { kind: 'attachment'; value: Attachment }
   | { kind: 'deleted'; value: { id: string; deleted: true } }
-  | { kind: 'config'; value: { file: string; url: string } }
+  | { kind: 'config'; value: { url: string } }
   | { kind: 'upgraded'; value: { file: string; from: string; to: string } }
   | { kind: 'help'; value: HelpValue }
 
@@ -304,13 +304,8 @@ async function cmdDelete(id: string): Promise<CommandResult> {
 }
 
 function cmdConfig(positionals: string[]): CommandResult {
-  if (positionals.length > 0) {
-    const [verb, key, value] = positionals
-    if (positionals.length !== 3 || verb !== 'set' || key !== 'url') throw new KbError('usage', 'expected: sparrow config set url <URL>')
-    if (!/^https?:\/\/[^/]/.test(value) || !URL.canParse(value)) throw new KbError('usage', `invalid url "${value}"`)
-    writeConfig({ ...readConfig(), url: value.replace(/\/+$/, '') })
-  }
-  return { kind: 'config', value: { file: configPath(), url: serverUrl() } }
+  if (positionals.length > 0) throw new KbError('usage', 'sparrow config takes no arguments. Use --env or SPARROW_URL to pick the server')
+  return { kind: 'config', value: { url: serverUrl() } }
 }
 
 // Downloads the server's CLI bundle and swaps it in for the running file.

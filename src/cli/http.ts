@@ -39,7 +39,7 @@ export async function call(path: string, init: RequestInit = {}, raw = false): P
     const reason = cause?.code ?? cause?.message ?? (err as Error).message
     throw new KbError(
       'unavailable',
-      `cannot reach the sparrow server at ${base} (${reason}). Set SPARROW_URL or run: sparrow config set url <URL>`,
+      `cannot reach the sparrow server at ${base} (${reason}). Check SPARROW_URL or --env`,
     )
   }
 }
