@@ -2,7 +2,7 @@ export const AGENTS_MD = `# AGENTS.md
 
 This workspace uses a \`sparrow\` kanban board. Tasks live on a sparrow server
 (SQLite behind a Next.js app); the \`sparrow\` CLI talks to it over HTTP. Each
-task has an id, title, status, rank, parent, due, assignee, links, refs,
+task has an id, title, status, rank, parent, due, links, refs,
 a Markdown body, comments, and attachments.
 
 ## Rule: change tasks through \`sparrow\`
@@ -21,13 +21,13 @@ If the server's major version differs, commands fail with exit code 5; run
 ## The work loop
 
 1. \`sparrow list --status todo\` — find a task. Tasks are listed by rank.
-2. \`sparrow update <id> --status in-progress --assignee ai\` — take it.
+2. \`sparrow update <id> --status in-progress\` — take it.
 3. Do the work.
 4. \`sparrow comment <id> --author ai --body "what you did"\` — leave a note.
 5. \`sparrow update <id> --status done\` — mark it done.
 
-Skip tasks that have an assignee other than you, are blocked by an
-unfinished task, or have unfinished subtasks.
+Skip tasks that are already in progress, are blocked by an unfinished
+task, or have unfinished subtasks.
 
 ## Editing a task
 

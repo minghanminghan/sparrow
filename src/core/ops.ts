@@ -11,7 +11,6 @@ export type Op =
   | { type: 'setStatus'; status: string; rank?: string }
   | { type: 'setRank'; rank: string }
   | { type: 'setDue'; due: string | null }
-  | { type: 'setAssignee'; assignee: string | null }
   | { type: 'setParent'; parent: string | null }
   | { type: 'setTitle'; title: string; baseHash?: string }
   | { type: 'setBody'; body: string; baseHash?: string }
@@ -21,14 +20,12 @@ export type Op =
   | { type: 'removeRef'; url: string }
   | { type: 'addComment'; author: string; body: string }
   | { type: 'editComment'; index: number; at: string; body: string }
-  | { type: 'claim'; assignee: string }
 
 export type CreateInput = {
   title: string
   status?: string
   parent?: string
   due?: string
-  assignee?: string
   body?: string
   rank?: string
   links?: Link[]
@@ -94,9 +91,6 @@ function apply(db: Db, config: Config, task: Task, op: Op, at: string): void {
     case 'setDue':
       task.due = op.due ?? undefined
       return
-    case 'setAssignee':
-      task.assignee = op.assignee ?? undefined
-      return
     case 'setParent':
       if (op.parent) checkParent(db, task.id, op.parent)
       task.parent = op.parent ?? undefined
@@ -129,12 +123,6 @@ function apply(db: Db, config: Config, task: Task, op: Op, at: string): void {
       if (task.comments[op.index]?.at !== op.at) throw new KbError('conflict', 'comment changed since it was read')
       task.comments[op.index].body = op.body
       return
-    case 'claim':
-      if (task.assignee && task.assignee !== op.assignee) {
-        throw new KbError('conflict', `${task.id} is already claimed by ${task.assignee}`)
-      }
-      task.assignee = op.assignee
-      return move(db, config, task, columnByRole(config, 'active').key, at)
   }
 }
 
@@ -168,7 +156,6 @@ export function createTask(db: Db, input: CreateInput): Task {
       rank: '',
       parent: input.parent,
       due: input.due,
-      assignee: input.assignee,
       links: input.links ?? [],
       refs: input.refs ?? [],
       created: at,

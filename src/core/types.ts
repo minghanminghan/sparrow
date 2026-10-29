@@ -13,7 +13,6 @@ export type Task = {
   rank: string
   parent?: string
   due?: string
-  assignee?: string
   completed?: string
   links: Link[]
   refs: Ref[]

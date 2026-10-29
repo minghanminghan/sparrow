@@ -20,10 +20,7 @@ function CardContent({ task }: { task: TaskView }) {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-xs text-gray-400">{task.id}</span>
-        {task.assignee && <span className="truncate text-xs text-gray-500">{task.assignee}</span>}
-      </div>
+      <div className="font-mono text-xs text-gray-400">{task.id}</div>
       <div className="mt-1 font-medium text-gray-900">{task.title}</div>
       {parentTitle && <div className="mt-1 truncate text-xs text-gray-500">↳ {parentTitle}</div>}
       <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">

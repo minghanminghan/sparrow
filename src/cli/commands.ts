@@ -29,7 +29,6 @@ export const COMMANDS: CommandDef[] = [
     flags: [
       { name: 'status', type: 'string', desc: 'filter by status' },
       { name: 'parent', type: 'string', desc: 'filter by parent id' },
-      { name: 'assignee', type: 'string', desc: 'filter by assignee' },
       { name: 'due-before', type: 'string', desc: 'filter: due before YYYY-MM-DD' },
       { name: 'overdue', type: 'boolean', desc: 'filter: due before today (local)' },
       { name: 'tree', type: 'boolean', desc: 'order children under parents' },
@@ -47,7 +46,6 @@ export const COMMANDS: CommandDef[] = [
       { name: 'parent', type: 'string', desc: 'parent task id' },
       { name: 'status', type: 'string', desc: 'status (default: ready column)' },
       { name: 'due', type: 'string', desc: 'due date YYYY-MM-DD' },
-      { name: 'assignee', type: 'string', desc: 'assignee' },
       { name: 'body', type: 'string', desc: 'body text, or "-" for stdin' },
       { name: 'body-file', type: 'string', desc: 'path to a file with body text' },
     ],
@@ -64,7 +62,6 @@ export const COMMANDS: CommandDef[] = [
       { name: 'body-hash', type: 'string', desc: 'expected bodyHash, for conflict checking' },
       { name: 'status', type: 'string', desc: 'new status' },
       { name: 'due', type: 'string', desc: 'YYYY-MM-DD, or "none" to clear' },
-      { name: 'assignee', type: 'string', desc: 'assignee, or "none" to clear' },
       { name: 'parent', type: 'string', desc: 'new parent task id' },
       { name: 'before', type: 'string', desc: 'rank just before this task id, same status' },
       { name: 'after', type: 'string', desc: 'rank just after this task id, same status' },
@@ -186,7 +183,6 @@ function filterTasks(idx: Index, values: Values): TaskView[] {
   if (!values.all) tasks = tasks.filter((t) => !isDone(idx.config, t.status))
   if (values.status !== undefined) tasks = tasks.filter((t) => t.status === values.status)
   if (values.parent !== undefined) tasks = tasks.filter((t) => t.parent === values.parent)
-  if (values.assignee !== undefined) tasks = tasks.filter((t) => t.assignee === values.assignee)
   if (values['due-before'] !== undefined) {
     const before = values['due-before'] as string
     tasks = tasks.filter((t) => t.due !== undefined && t.due < before)
@@ -215,7 +211,6 @@ async function cmdCreate(values: Values): Promise<CommandResult> {
     parent: values.parent as string | undefined,
     status: values.status as string | undefined,
     due: values.due as string | undefined,
-    assignee: values.assignee as string | undefined,
     body: readBodyInput(values),
   }
   return { kind: 'task', value: await sendJson<TaskView>('/api/tasks', 'POST', input) }
@@ -246,9 +241,6 @@ async function cmdUpdate(id: string, values: Values): Promise<CommandResult> {
   if (body !== undefined) await apply({ type: 'setBody', body, baseHash: values['body-hash'] as string | undefined })
   if (values.status !== undefined) await apply({ type: 'setStatus', status: values.status as string })
   if (values.due !== undefined) await apply({ type: 'setDue', due: values.due === 'none' ? null : (values.due as string) })
-  if (values.assignee !== undefined) {
-    await apply({ type: 'setAssignee', assignee: values.assignee === 'none' ? null : (values.assignee as string) })
-  }
   if (values.parent !== undefined) await apply({ type: 'setParent', parent: values.parent as string })
   if (values.before !== undefined || values.after !== undefined) {
     const rank = await neighborRank(task.status, id, values.before as string | undefined, values.after as string | undefined)

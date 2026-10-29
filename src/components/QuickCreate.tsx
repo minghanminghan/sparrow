@@ -34,7 +34,6 @@ export function QuickCreate() {
   const [status, setStatus] = useState('')
   const [parent, setParent] = useState('')
   const [due, setDue] = useState('')
-  const [assignee, setAssignee] = useState('')
   const [body, setBody] = useState('')
   const [links, setLinks] = useState<Link[]>([])
   const [refs, setRefs] = useState<Ref[]>([])
@@ -62,7 +61,6 @@ export function QuickCreate() {
     setTitle('')
     setParent('')
     setDue('')
-    setAssignee('')
     setBody('')
     setLinks([])
     setRefs([])
@@ -78,7 +76,7 @@ export function QuickCreate() {
   }
 
   function onClose(): void {
-    const dirty = title || parent || due || assignee || body || url || links.length || refs.length || photos.length
+    const dirty = title || parent || due || body || url || links.length || refs.length || photos.length
     if (dirty && !window.confirm('Discard this task?')) return
     close()
   }
@@ -101,7 +99,6 @@ export function QuickCreate() {
         rank: first ? rankBetween(undefined, first.rank) : undefined,
         parent: parent.trim() || undefined,
         due: due || undefined,
-        assignee: assignee.trim() || undefined,
         body: body.trim() || undefined,
         links,
         refs,
@@ -175,9 +172,6 @@ export function QuickCreate() {
   )
 
   const dueInput = <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={FIELD} />
-  const assigneeInput = (
-    <input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="Unassigned" className={FIELD} />
-  )
   const parentInput = (
     <input
       value={parent}
@@ -308,7 +302,6 @@ export function QuickCreate() {
             <div className="mt-3 flex flex-col gap-3">
               {parentInput}
               {dueInput}
-              {assigneeInput}
               {linksSection}
               {refsSection}
             </div>
@@ -329,7 +322,6 @@ export function QuickCreate() {
         <div className="flex flex-wrap gap-2">
           {statusSelect}
           {dueInput}
-          {assigneeInput}
           {parentInput}
         </div>
 
