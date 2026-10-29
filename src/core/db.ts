@@ -67,6 +67,7 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE tasks ADD COLUMN client_id TEXT;
   CREATE UNIQUE INDEX tasks_client_id ON tasks (client_id) WHERE client_id IS NOT NULL;
   `,
+  `ALTER TABLE tasks DROP COLUMN assignee;`,
 ]
 
 export function dbPath(): string {

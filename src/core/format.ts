@@ -11,7 +11,6 @@ const KNOWN_KEYS = [
   'parent',
   'due',
   'rank',
-  'assignee',
   'links',
   'refs',
   'created',
@@ -116,7 +115,6 @@ export function parseTask(text: string): Task {
     rank: data.rank as string,
     parent: (data.parent as string) || undefined,
     due: (data.due as string) || undefined,
-    assignee: (data.assignee as string) || undefined,
     completed: (data.completed as string) || undefined,
     links,
     refs,
@@ -133,7 +131,6 @@ function buildFrontmatterObject(t: Task): Record<string, unknown> {
   if (t.parent) obj.parent = Number(t.parent)
   if (t.due) obj.due = t.due
   obj.rank = t.rank
-  if (t.assignee) obj.assignee = t.assignee
   if (t.links.length) obj.links = t.links.map((l) => ({ [l.type]: Number(l.id) }))
   if (t.refs.length) {
     obj.refs = t.refs.map((r) => (r.label ? { url: r.url, label: r.label } : { url: r.url }))

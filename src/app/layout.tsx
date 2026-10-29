@@ -3,6 +3,7 @@ import "./globals.css";
 import { Shell } from "@/components/Shell";
 import { RegisterSW } from "@/components/RegisterSW";
 import { readDevState } from "@/core/dev-state";
+import { VERSION } from "@/core/version";
 
 export const metadata: Metadata = {
   title: "sparrow",
@@ -24,7 +25,7 @@ export default function RootLayout({
   return (
     <html lang="en" data-env={env}>
       <body>
-        <Shell env={env}>{children}</Shell>
+        <Shell env={env} version={VERSION}>{children}</Shell>
         <RegisterSW />
       </body>
     </html>

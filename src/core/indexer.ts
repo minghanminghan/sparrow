@@ -83,7 +83,7 @@ export function viewTask(index: Index, id: string): TaskView | undefined {
   return index.tasks.find((t) => t.id === id)
 }
 
-export function nextTask(index: Index, assignee?: string): TaskView | null {
+export function nextTask(index: Index): TaskView | null {
   const { config, tasks } = index
   const readyKey = columnByRole(config, 'ready').key
   const byId = new Map(tasks.map((t) => [t.id, t]))
@@ -98,9 +98,7 @@ export function nextTask(index: Index, assignee?: string): TaskView | null {
   const candidates = tasks.filter((t) => {
     if (t.status !== readyKey) return false
     if (hasUnfinishedSubtask(t)) return false
-    if (t.blocked) return false
-    if (assignee === undefined) return t.assignee === undefined
-    return t.assignee === undefined || t.assignee === assignee
+    return !t.blocked
   })
 
   candidates.sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))

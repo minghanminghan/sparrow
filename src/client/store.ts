@@ -18,7 +18,6 @@ import { VERSION } from '@/core/version'
 export type Filters = {
   q: string
   hideSubtasks: boolean
-  assignee?: string
   due?: 'overdue' | 'week'
   showDone: boolean
 }
@@ -404,12 +403,8 @@ function todayLocalDay(): number {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
 }
 
-export function assigneesOf(tasks: TaskView[]): string[] {
-  return [...new Set(tasks.flatMap((t) => (t.assignee ? [t.assignee] : [])))].sort((a, b) => a.localeCompare(b))
-}
-
 // showDone is always applied here; the board (Task 8) handles its own
-// done column (14-day cutoff) separately and should pass showDone: true
+// done column (this week only) separately and should pass showDone: true
 // so this filter doesn't also hide those cards.
 export function applyFilters(tasks: TaskView[], f: Filters, config: Config): TaskView[] {
   let result = tasks
@@ -418,8 +413,6 @@ export function applyFilters(tasks: TaskView[], f: Filters, config: Config): Tas
   if (q) result = result.filter((t) => t.id.toLowerCase().includes(q) || t.title.toLowerCase().includes(q))
 
   if (f.hideSubtasks) result = result.filter((t) => !t.parent)
-
-  if (f.assignee) result = result.filter((t) => t.assignee === f.assignee)
 
   if (f.due) {
     const today = todayLocalDay()

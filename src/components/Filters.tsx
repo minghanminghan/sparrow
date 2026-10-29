@@ -1,14 +1,11 @@
 'use client'
 
-import { useMemo } from 'react'
-import { assigneesOf, useKb } from '@/client/store'
+import { useKb } from '@/client/store'
 import type { Filters as FiltersType } from '@/client/store'
 
 export function Filters() {
   const filters = useKb((s) => s.filters)
   const setFilters = useKb((s) => s.setFilters)
-  const tasks = useKb((s) => s.index?.tasks)
-  const assignees = useMemo(() => assigneesOf(tasks ?? []), [tasks])
 
   return (
     <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
@@ -20,18 +17,6 @@ export function Filters() {
         />
         Hide subtasks
       </label>
-      <select
-        value={filters.assignee ?? ''}
-        onChange={(e) => setFilters({ assignee: e.target.value || undefined })}
-        className="rounded border border-gray-300 px-2 py-1"
-      >
-        <option value="">Assignee: any</option>
-        {assignees.map((a) => (
-          <option key={a} value={a}>
-            {a}
-          </option>
-        ))}
-      </select>
       <select
         value={filters.due ?? ''}
         onChange={(e) => setFilters({ due: (e.target.value || undefined) as FiltersType['due'] })}

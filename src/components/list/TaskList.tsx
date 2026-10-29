@@ -56,7 +56,7 @@ function keyOf(task: TaskView, included: Map<string, boolean>): string | undefin
 // Encoded as primitive strings (not objects/Maps) so a `useShallow` selector
 // can bail the component out of re-rendering when an edit doesn't change
 // which rows are shown, their order, depth, or dimmed state — only id/parent/
-// rank/status/due/assignee/title changes (the inputs to filtering and
+// rank/status/due/title changes (the inputs to filtering and
 // ordering) can change this array's contents.
 function encodeRows(groups: Groups): string[] {
   const rows: string[] = []
@@ -147,7 +147,7 @@ function GroupRows({ parentKey, tree, collapsed, selected, onToggleCollapse, onR
 }
 
 export function TaskList() {
-  // Filtering (title/status/assignee/due/etc.) happens inside the selector,
+  // Filtering (title/status/due/etc.) happens inside the selector,
   // which returns only primitive strings encoding order/depth/dimmed/parent.
   // useShallow then bails the component out of re-rendering when an edit
   // doesn't change the visible structure — see computeGroups/encodeRows.

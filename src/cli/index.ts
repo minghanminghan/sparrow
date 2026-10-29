@@ -38,7 +38,6 @@ function printDetail(t: TaskView): void {
   const fields: [string, string | undefined][] = [
     ['Title', t.title],
     ['Status', t.status],
-    ['Assignee', t.assignee],
     ['Due', t.due],
     ['Parent', t.parent],
     ['Children', t.children.length ? `${t.children.join(', ')} (${t.progress.done}/${t.progress.total} done)` : undefined],

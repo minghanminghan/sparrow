@@ -38,7 +38,6 @@ export function loadTasks(db: Db, id?: string): Task[] {
       rank: String(r.rank),
       parent: str(r.parent),
       due: str(r.due),
-      assignee: str(r.assignee),
       completed: str(r.completed),
       links: links.get(tid) ?? [],
       refs: refs.get(tid) ?? [],
@@ -55,10 +54,10 @@ export function loadTasks(db: Db, id?: string): Task[] {
 export function saveTask(db: Db, task: Task): string {
   const row = db
     .prepare(
-      `INSERT INTO tasks (id, title, status, rank, parent, due, assignee, body, extra, created, updated, completed)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO tasks (id, title, status, rank, parent, due, body, extra, created, updated, completed)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (id) DO UPDATE SET title = excluded.title, status = excluded.status, rank = excluded.rank,
-         parent = excluded.parent, due = excluded.due, assignee = excluded.assignee, body = excluded.body,
+         parent = excluded.parent, due = excluded.due, body = excluded.body,
          extra = excluded.extra, updated = excluded.updated, completed = excluded.completed
        RETURNING id`,
     )
@@ -69,7 +68,6 @@ export function saveTask(db: Db, task: Task): string {
       task.rank,
       task.parent ?? null,
       task.due ?? null,
-      task.assignee ?? null,
       task.body,
       JSON.stringify(task.extra),
       task.created,

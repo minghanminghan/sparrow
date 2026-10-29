@@ -4,7 +4,6 @@ import { memo } from 'react'
 import type { MouseEvent } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { useKb } from '@/client/store'
-import { AssigneeField } from '@/components/AssigneeField'
 
 type RowProps = {
   id: string
@@ -103,12 +102,6 @@ function RowImpl({ id, depth, dimmed, selected, hasChildren, collapsed, onToggle
           void op(task.id, { type: 'setDue', due }, (t) => ({ ...t, due: due ?? undefined }))
         }}
         className="shrink-0 rounded border border-gray-200 px-1 py-0.5 text-xs"
-      />
-      <AssigneeField
-        id={task.id}
-        assignee={task.assignee}
-        onClick={(e) => e.stopPropagation()}
-        className="w-24 shrink-0 rounded border border-gray-200 px-1 py-0.5 text-xs"
       />
       <span className="w-10 shrink-0 text-right text-xs text-gray-500">
         {task.progress.total > 0 ? `${task.progress.done}/${task.progress.total}` : ''}

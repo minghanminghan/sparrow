@@ -9,7 +9,6 @@ import { columnByRole, isDone } from '@/core/columns'
 import { formatSize, isInlineImage } from '@/core/mime'
 import { ApiError } from '@/client/api'
 import { useKb } from '@/client/store'
-import { AssigneeField } from '@/components/AssigneeField'
 import { Markdown } from '@/components/Markdown'
 
 const nowIso = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -726,11 +725,6 @@ export function TaskDetail({ id, fullPage = false }: { id: string; fullPage?: bo
               const due = e.target.value || null
               void op(task.id, { type: 'setDue', due }, (t) => ({ ...t, due: due ?? undefined }))
             }}
-            className="rounded border border-gray-300 px-2 py-1 text-sm"
-          />
-          <AssigneeField
-            id={task.id}
-            assignee={task.assignee}
             className="rounded border border-gray-300 px-2 py-1 text-sm"
           />
         </div>

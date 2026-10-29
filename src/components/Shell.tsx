@@ -23,7 +23,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
 }
 
-export function Shell({ children, env }: { children: ReactNode; env?: Env }) {
+export function Shell({ children, env, version }: { children: ReactNode; env?: Env; version: string }) {
   const pathname = usePathname()
   const connect = useKb((s) => s.connect)
   const q = useKb((s) => s.filters.q)
@@ -35,7 +35,7 @@ export function Shell({ children, env }: { children: ReactNode; env?: Env }) {
   const searchRef = useRef<HTMLInputElement>(null)
   const filtered = useKb((s) => {
     const f = s.filters
-    return Boolean(f.q || f.hideSubtasks || f.assignee || f.due || f.showDone)
+    return Boolean(f.q || f.hideSubtasks || f.due || f.showDone)
   })
   const [filterOpen, setFilterOpen] = useState(false)
   // Only the board has a phone layout; other pages keep the desktop header at every width.
@@ -74,6 +74,7 @@ export function Shell({ children, env }: { children: ReactNode; env?: Env }) {
           <div className="flex items-center gap-3">
             {env && <EnvToggle env={env} />}
             <h1 className="text-sm font-medium text-gray-900">Board</h1>
+            <span className="text-xs text-gray-400">v{version}</span>
           </div>
           <button onClick={() => setFilterOpen(true)} className="flex items-center gap-1 text-sm text-gray-600">
             Filter
@@ -94,6 +95,7 @@ export function Shell({ children, env }: { children: ReactNode; env?: Env }) {
             All tasks
           </Link>
         </nav>
+        <span className="text-xs text-gray-400">v{version}</span>
         <input
           ref={searchRef}
           value={q}
