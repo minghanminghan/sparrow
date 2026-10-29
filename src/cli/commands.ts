@@ -18,6 +18,7 @@ export type Values = Record<string, string | boolean | undefined>
 
 export const GLOBAL_FLAGS: FlagDef[] = [
   { name: 'json', type: 'boolean', desc: 'force JSON output' },
+  { name: 'env', type: 'string', desc: 'dev (the local `pnpm dev` DB) or prod. Default: SPARROW_URL, then config url' },
   { name: 'help', short: 'h', type: 'boolean', desc: 'Print help' },
 ]
 

@@ -1,7 +1,8 @@
 import { EXIT, KbError } from '../core/errors'
 import type { ErrorCode } from '../core/errors'
+import { ENV_HEADER } from '../core/env'
 import { compareVersions, VERSION, VERSION_HEADER } from '../core/version'
-import { serverUrl } from './config'
+import { currentEnv, serverUrl } from './config'
 
 let warned = false
 
@@ -9,6 +10,7 @@ let warned = false
 export async function request(url: string | URL, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers)
   headers.set(VERSION_HEADER, VERSION)
+  if (currentEnv() === 'dev') headers.set(ENV_HEADER, 'dev')
   const res = await fetch(url, { ...init, headers })
   checkServerVersion(res.headers.get(VERSION_HEADER) ?? (res.status === 426 ? 'unknown' : null))
   return res

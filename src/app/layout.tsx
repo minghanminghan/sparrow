@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Shell } from "@/components/Shell";
 import { RegisterSW } from "@/components/RegisterSW";
+import { readDevState } from "@/core/dev-state";
 
 export const metadata: Metadata = {
   title: "sparrow",
@@ -18,10 +19,12 @@ export const viewport: Viewport = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Only `pnpm dev` can switch between the local DB and prod. See scripts/dev.sh.
+  const env = process.env.NODE_ENV === "development" ? (readDevState()?.env ?? "dev") : undefined;
   return (
-    <html lang="en">
+    <html lang="en" data-env={env}>
       <body>
-        <Shell>{children}</Shell>
+        <Shell env={env}>{children}</Shell>
         <RegisterSW />
       </body>
     </html>

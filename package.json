@@ -7,12 +7,13 @@
     "sparrow": "dist/cli.js"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "scripts/dev.sh",
     "build": "next build && tsup",
     "start": "next start",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "db:pull": "scripts/db-pull.sh"
+    "db:pull": "scripts/db-pull.sh",
+    "db:clear": "scripts/db-clear.sh"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

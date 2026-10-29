@@ -1,10 +1,11 @@
 import { get, set } from 'idb-keyval'
 import type { Index } from '@/core'
 import { VERSION, compareVersions } from '@/core/version'
+import { storageKey } from './env'
 
 export type CachedIndex = { index: Index; rev: string; savedAt: number; version: string }
 
-const KEY = 'index'
+const KEY = () => storageKey('index')
 
 export function usableCache(c: CachedIndex | null, appVersion: string): CachedIndex | null {
   return c && compareVersions(c.version, appVersion) !== 'incompatible' ? c : null
@@ -12,7 +13,7 @@ export function usableCache(c: CachedIndex | null, appVersion: string): CachedIn
 
 export async function loadCachedIndex(): Promise<CachedIndex | null> {
   try {
-    return usableCache((await get<CachedIndex>(KEY)) ?? null, VERSION)
+    return usableCache((await get<CachedIndex>(KEY())) ?? null, VERSION)
   } catch {
     return null
   }
@@ -20,6 +21,6 @@ export async function loadCachedIndex(): Promise<CachedIndex | null> {
 
 export async function saveCachedIndex(c: CachedIndex): Promise<void> {
   try {
-    await set(KEY, c)
+    await set(KEY(), c)
   } catch {}
 }

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { isDone } from '@/core/columns'
 import type { Config, CreateInput, Index, Op, TaskView } from '@/core'
+import type { Env } from '@/core/env'
 import type { ServerEvent } from '@/server/state'
 import {
   ApiError,
@@ -38,6 +39,10 @@ type KbStore = {
   toasts: Toast[]
   pending: OutboxEntry[]
   connect(): void
+  // Dev servers only: the DB picked with the toggle since the page loaded.
+  env: Env | null
+  // Dev servers only: moves the board to the other DB without a page reload.
+  switchEnv(env: Env): void
   op(id: string, op: Op, optimistic?: (t: TaskView) => TaskView): Promise<void>
   // null means the task was queued in the outbox to be sent later.
   create(input: CreateInput, photos?: File[]): Promise<TaskView | null>
@@ -55,6 +60,8 @@ type KbStore = {
 
 let eventSource: EventSource | null = null
 let connecting = false
+let retry: ReturnType<typeof setTimeout> | undefined
+let reopen: (() => void) | null = null
 const RECONNECT_MS = 3000
 const CACHE_TIMEOUT_MS = 1000
 const TOAST_MS = 6000
@@ -132,6 +139,7 @@ export const useKb = create<KbStore>()((set, get) => {
     createFor: null,
     toasts: [],
     pending: [],
+    env: null,
 
     connect() {
       if (eventSource || connecting) return
@@ -161,7 +169,7 @@ export const useKb = create<KbStore>()((set, get) => {
         es.onerror = () => {
           set({ connected: false, offline: true })
           es.close()
-          setTimeout(open, RECONNECT_MS)
+          retry = setTimeout(open, RECONNECT_MS)
         }
         es.onmessage = (ev: MessageEvent<string>) => {
           const event = JSON.parse(ev.data) as ServerEvent
@@ -208,6 +216,7 @@ export const useKb = create<KbStore>()((set, get) => {
         }
       }
 
+      reopen = open
       let opened = false
       function apply(c: Awaited<ReturnType<typeof loadCachedIndex>>): void {
         if (!c || get().index) return
@@ -231,6 +240,19 @@ export const useKb = create<KbStore>()((set, get) => {
         apply(c)
         start()
       })
+    },
+
+    switchEnv(env) {
+      document.documentElement.dataset.env = env
+      eventSource?.close()
+      eventSource = null
+      clearTimeout(retry)
+      for (const id of Object.keys(confirmed)) delete confirmed[id]
+      // The old board stays up until the new DB's snapshot replaces it.
+      set({ env, rev: null, pending: [], panelId: null })
+      loaded = loadOutbox().then((stored) => set({ pending: stored }))
+      outboxReady = Promise.race([loaded, new Promise<void>((r) => setTimeout(r, CACHE_TIMEOUT_MS))])
+      reopen?.()
     },
 
     async op(id, opArg, optimistic) {

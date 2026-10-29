@@ -1,6 +1,7 @@
 import { get, set } from 'idb-keyval'
 import type { CreateInput, TaskView } from '@/core'
 import { ApiError } from './api'
+import { storageKey } from './env'
 
 export type OutboxEntry = {
   clientId: string
@@ -19,7 +20,7 @@ export type OutboxDeps = {
 export const CREATE_TIMEOUT_MS = 8000
 export const UPLOAD_TIMEOUT_MS = 30000
 
-const KEY = 'outbox'
+const KEY = () => storageKey('outbox')
 
 export function isNetworkError(err: unknown): boolean {
   if (err instanceof ApiError) return false
@@ -77,7 +78,7 @@ export async function flushEntry(
 
 export async function loadOutbox(): Promise<OutboxEntry[]> {
   try {
-    return (await get<OutboxEntry[]>(KEY)) ?? []
+    return (await get<OutboxEntry[]>(KEY())) ?? []
   } catch {
     return []
   }
@@ -85,6 +86,6 @@ export async function loadOutbox(): Promise<OutboxEntry[]> {
 
 export async function saveOutbox(entries: OutboxEntry[]): Promise<void> {
   try {
-    await set(KEY, entries)
+    await set(KEY(), entries)
   } catch {}
 }
