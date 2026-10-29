@@ -3,6 +3,7 @@ import { EXIT, KbError } from '../core/errors'
 import type { TaskView } from '../core/indexer'
 import { formatSize } from '../core/mime'
 import { COMMANDS, GLOBAL_FLAGS, runCommand } from './commands'
+import { setEnv } from './config'
 import type { CommandResult, FlagDef, HelpValue, Values } from './commands'
 
 type ParseOption = { type: 'string' | 'boolean'; short?: string }
@@ -140,6 +141,7 @@ async function main(): Promise<void> {
   const unknown = Object.keys(values).find((k) => !allowed.has(k))
   if (unknown) throw new KbError('usage', `unknown option "--${unknown}" for ${cmd.name}`)
   if (values.help && cmd.name !== 'help') positionals = [cmd.name]
+  setEnv(values.env as string | undefined)
 
 
   const jsonMode = Boolean(values.json) || !process.stdout.isTTY

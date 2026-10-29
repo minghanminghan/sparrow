@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useKb } from '@/client/store'
+import type { Env } from '@/core/env'
+import { EnvToggle } from './EnvToggle'
 import { Filters } from './Filters'
 import { FilterSheet } from './mobile/FilterSheet'
 import { OfflineBar } from './OfflineBar'
@@ -21,7 +23,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
 }
 
-export function Shell({ children }: { children: ReactNode }) {
+export function Shell({ children, env }: { children: ReactNode; env?: Env }) {
   const pathname = usePathname()
   const connect = useKb((s) => s.connect)
   const q = useKb((s) => s.filters.q)
@@ -69,7 +71,10 @@ export function Shell({ children }: { children: ReactNode }) {
       <OfflineBar />
       {phone && (
         <header className="flex items-center justify-between border-b border-gray-200 px-4 py-2 md:hidden">
-          <h1 className="text-sm font-medium text-gray-900">Board</h1>
+          <div className="flex items-center gap-3">
+            {env && <EnvToggle env={env} />}
+            <h1 className="text-sm font-medium text-gray-900">Board</h1>
+          </div>
           <button onClick={() => setFilterOpen(true)} className="flex items-center gap-1 text-sm text-gray-600">
             Filter
             {filtered && <span className="h-1.5 w-1.5 rounded-full bg-gray-900" />}
@@ -77,6 +82,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </header>
       )}
       <header className={`${phone ? 'hidden md:flex' : 'flex'} flex-wrap items-center gap-4 border-b border-gray-200 px-4 py-2`}>
+        {env && <EnvToggle env={env} />}
         <nav className="flex gap-3 text-sm font-medium">
           <Link href="/" className={pathname === '/' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'}>
             Board
