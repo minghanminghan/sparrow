@@ -14,8 +14,7 @@ exit-code reference.
 ## Connecting
 
 \`--env prod\` uses the prod server and \`--env dev\` the local \`pnpm dev\` server.
-Without \`--env\`, the CLI uses \`SPARROW_URL\`, else the url in \`~/.config/sparrow/config.json\`
-(set it with \`sparrow config set url <url>\`), else \`http://127.0.0.1:3000\`.
+Without \`--env\`, the CLI uses \`SPARROW_URL\`, else the prod server.
 If the server's major version differs, commands fail with exit code 5; run
 \`sparrow upgrade\` to download the server's CLI.
 

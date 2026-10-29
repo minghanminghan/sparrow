@@ -110,7 +110,7 @@ function printResult(result: CommandResult, jsonMode: boolean): void {
       console.log(`${result.value.id} deleted`)
       return
     case 'config':
-      console.log(`url  ${result.value.url}\nfile ${result.value.file}`)
+      console.log(`url  ${result.value.url}`)
       return
     case 'upgraded':
       console.log(`sparrow ${result.value.from} -> ${result.value.to} (${result.value.file})`)
