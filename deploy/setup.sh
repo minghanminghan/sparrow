@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # One-time (and safe to re-run) mini PC setup for sparrow. Run as root from a repo checkout:
-#   sudo [PORT=3417] [TS_PORT=8443] [NODE_BIN=/usr/bin/node] deploy/setup.sh
+#   sudo [PORT=3417] [NODE_BIN=/usr/bin/node] deploy/setup.sh
 # Creates the sparrow and sparrow-runner users and dirs, installs sparrow.service on 127.0.0.1:$PORT,
 # the nightly sparrow-backup.timer and sparrow-predeploy.service, lets sparrow-runner deploy (see
-# deploy/runner.sh), and adds https://<host>:$TS_PORT -> 127.0.0.1:$PORT to the existing tailscale
-# serve config.
+# deploy/runner.sh), and serves https://sparrow.<domain> -> 127.0.0.1:$PORT to the tailnet (deploy/caddy).
 set -euo pipefail
 
 UNIT=/etc/systemd/system/sparrow.service
@@ -24,7 +23,6 @@ done
 # Keep the port from a previous run unless PORT is given.
 PORT=${PORT:-$(sed -n 's/^Environment=PORT=//p' "$UNIT" 2>/dev/null || true)}
 PORT=${PORT:-3417}
-TS_PORT=${TS_PORT:-8443}
 NODE_BIN=${NODE_BIN:-$(command -v node || true)}
 TARGET=http://127.0.0.1:$PORT
 
@@ -86,23 +84,8 @@ else
   echo "    $OPT/current does not exist yet; the service starts after the first deploy"
 fi
 
-step "tailscale serve: https :$TS_PORT -> $TARGET"
-# Prints "ours <port>" if some HTTPS port already proxies to TARGET, "taken" if TS_PORT is used, else "free".
-state=$(tailscale serve status --json | "$NODE_BIN" -e '
-  const s = JSON.parse(require("fs").readFileSync(0, "utf8") || "{}")
-  const [target, want] = process.argv.slice(1)
-  for (const [hostPort, web] of Object.entries(s.Web || {}))
-    if (Object.values(web.Handlers || {}).some((h) => h.Proxy === target)) { console.log("ours", hostPort.split(":").pop()); process.exit() }
-  console.log((s.TCP || {})[want] ? "taken" : "free")
-' "$TARGET" "$TS_PORT")
-case $state in
-  ours*) TS_PORT=${state#ours }; echo "    already served on :$TS_PORT" ;;
-  taken) die "tailscale HTTPS port $TS_PORT is already in use. Pick another: TS_PORT=<port> $0" ;;
-  free) tailscale serve --bg --https="$TS_PORT" "$TARGET" ;;
-esac
-
-HOST=$(tailscale status --json | "$NODE_BIN" -e 'console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).Self.DNSName.replace(/\.$/, ""))')
-URL=https://$HOST:$TS_PORT
+"$HERE/caddy/setup.sh" sparrow "127.0.0.1:$PORT"
+URL=https://sparrow.${DOMAIN:-andrewminghanjiang.com}
 
 cat <<EOF
 
