@@ -1,9 +1,10 @@
 'use client'
 
 import { memo } from 'react'
+import NextLink from 'next/link'
 import { useSortable } from '@dnd-kit/sortable'
 import type { TaskView } from '@/core'
-import { dueState, useKb } from '@/client/store'
+import { dueState, useKb, useProject } from '@/client/store'
 
 const DUE_STYLE: Record<'overdue' | 'soon', string> = {
   overdue: 'text-red-600',
@@ -17,10 +18,22 @@ function transformStyle(transform: { x: number; y: number } | null): string | un
 function CardContent({ task }: { task: TaskView }) {
   const parentTitle = useKb((s) => (task.parent ? s.byId[task.parent]?.title : undefined))
   const due = dueState(task.due)
+  const color = useProject(task.project)?.color
 
   return (
     <>
-      <div className="font-mono text-xs text-gray-400">{task.id}</div>
+      <div className="font-mono text-xs text-gray-400">
+        {/* Stops the click and the pointerdown so the key opens the project, not the panel or a drag. */}
+        <NextLink
+          href={`/p/${task.project}`}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{ color }}
+          className="hover:underline"
+        >
+          {task.id}
+        </NextLink>
+      </div>
       <div className="mt-1 font-medium text-gray-900">{task.title}</div>
       {parentTitle && <div className="mt-1 truncate text-xs text-gray-500">↳ {parentTitle}</div>}
       <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">

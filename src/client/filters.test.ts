@@ -40,4 +40,5 @@ test('pendingProject falls back to the parent key', () => {
   expect(pendingProject({ title: 'x', project: 'news' })).toBe('NEWS')
   expect(pendingProject({ title: 'x', parent: 'v2-3' })).toBe('V2')
   expect(pendingProject({ title: 'x' })).toBeUndefined()
+  expect(pendingProject({ title: 'x', parent: '28' })).toBeUndefined()
 })

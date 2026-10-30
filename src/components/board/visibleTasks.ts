@@ -30,8 +30,8 @@ export function visibleColumnTasks(index: Index, filters: Filters, columnKey: st
 /** The project a queued create will land in: its own, else its parent's. */
 export function pendingProject(input: CreateInput): string | undefined {
   if (input.project) return input.project.toUpperCase()
-  if (input.parent) return input.parent.slice(0, input.parent.lastIndexOf('-')).toUpperCase() || undefined
-  return undefined
+  const dash = input.parent?.lastIndexOf('-') ?? -1
+  return dash > 0 ? input.parent!.slice(0, dash).toUpperCase() : undefined
 }
 
 /** Outbox entries shown as pending cards in a column: not yet created, or failed, and in a filtered project. */
