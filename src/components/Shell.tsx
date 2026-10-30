@@ -94,6 +94,9 @@ export function Shell({ children, env, version }: { children: ReactNode; env?: E
           >
             All tasks
           </Link>
+          <Link href="/p" className={pathname.startsWith('/p') ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'}>
+            Projects
+          </Link>
         </nav>
         <span className="text-xs text-gray-400">v{version}</span>
         <input
