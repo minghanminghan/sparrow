@@ -61,12 +61,13 @@ export function refresh(state: State): void {
     if (!nextById.has(id)) safeEmit(state.emitter, { type: 'remove', id })
   }
 
-  const configChanged = JSON.stringify(next.config) !== JSON.stringify(state.index.config)
+  const configChanged =
+    JSON.stringify(next.config) !== JSON.stringify(state.index.config) || JSON.stringify(next.projects) !== JSON.stringify(state.index.projects)
   state.index = next
   const rev = revOf(next)
   if (rev !== state.rev) {
     state.rev = rev
-    // A bare rev would let clients cache the new rev with a stale config.
+    // A bare rev would let clients cache the new rev with a stale config or project list.
     safeEmit(state.emitter, configChanged ? { type: 'snapshot', index: next, rev } : { type: 'rev', rev })
   }
 }

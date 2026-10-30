@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, test } from 'vitest'
-import { buildIndex, createTask, openDb } from '@/core'
+import { buildIndex, createTask, openDb, PROJECT_COLORS, updateProject } from '@/core'
 import { refresh, revOf } from '@/server/state'
 import type { ServerEvent, State } from '@/server/state'
 
@@ -45,5 +45,12 @@ describe('state', () => {
     refresh(state)
     expect(state.rev).not.toBe(before)
     expect(events).toEqual([{ type: 'snapshot', index: state.index, rev: state.rev }])
+  })
+
+  test('refresh emits a snapshot when a project changes', () => {
+    const { state, events } = setup()
+    updateProject(state.db, 'SPAR', { color: PROJECT_COLORS[1] })
+    refresh(state)
+    expect(events.some((e) => e.type === 'snapshot' && e.index.projects[0].color === PROJECT_COLORS[1])).toBe(true)
   })
 })

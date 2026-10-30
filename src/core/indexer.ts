@@ -3,8 +3,9 @@ import { columnByRole, isDone, loadConfig } from './config'
 import type { Db } from './db'
 import { hash } from './format'
 import { MENTION_RE } from './keys'
+import { loadProjects } from './projects'
 import { loadTasks } from './store'
-import type { Attachment, Config, Task } from './types'
+import type { Attachment, Config, Project, Task } from './types'
 
 export type Backlink = { type: 'blocked-by' | 'relates' | 'mentioned-in'; id: string; done?: true }
 export type TaskView = Task & {
@@ -16,7 +17,7 @@ export type TaskView = Task & {
   progress: { done: number; total: number }
   attachments: Attachment[]
 }
-export type Index = { config: Config; tasks: TaskView[] }
+export type Index = { config: Config; projects: Project[]; tasks: TaskView[] }
 
 const REVERSE_LINK: Record<Task['links'][number]['type'], Backlink['type']> = {
   blocks: 'blocked-by',
@@ -75,7 +76,7 @@ export function buildIndex(db: Db): Index {
 
   views.sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
 
-  return { config, tasks: views }
+  return { config, projects: loadProjects(db), tasks: views }
 }
 
 export function viewTask(index: Index, id: string): TaskView | undefined {
