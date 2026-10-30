@@ -671,10 +671,8 @@ export function TaskDetail({ id, fullPage = false }: { id: string; fullPage?: bo
   if (!task || !config) {
     return <div className="p-4 text-sm text-gray-500">Loading…</div>
   }
-  const showCmd = `sparrow show ${task.id}`
-
-  async function copyCmd(): Promise<void> {
-    await navigator.clipboard.writeText(showCmd)
+  async function copyUrl(): Promise<void> {
+    await navigator.clipboard.writeText(`${window.location.origin}/t/${task.id}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 500)
   }
@@ -698,15 +696,14 @@ export function TaskDetail({ id, fullPage = false }: { id: string; fullPage?: bo
             <ProjectSquare color={project?.color} />
             {project?.name ?? task.project}
           </NextLink>
-          <span className="font-mono text-sm font-medium text-gray-400">{task.id}</span>
           <button
-            onClick={() => void copyCmd()}
-            title="Copy command"
-            className="min-w-0 flex-1 truncate text-left font-mono text-xs text-gray-400 hover:text-gray-700"
+            onClick={() => void copyUrl()}
+            title="Copy link"
+            className="font-mono text-sm font-medium text-gray-400 hover:text-gray-700"
           >
-            {copied ? 'Copied!' : showCmd}
+            {copied ? 'Copied!' : task.id}
           </button>
-          <button onClick={() => void handleDelete()} className="text-sm text-red-600 hover:underline">
+          <button onClick={() => void handleDelete()} className="ml-auto text-sm text-red-600 hover:underline">
             Delete
           </button>
         </div>

@@ -60,14 +60,14 @@ export function ProjectsList() {
           <input
             value={key}
             onChange={(e) => setKey(e.target.value)}
-            placeholder="Key (e.g. NEWS)"
+            placeholder="Key"
             maxLength={6}
-            className={`w-36 font-mono uppercase ${FIELD}`}
+            className={`w-36 font-mono ${FIELD}`}
           />
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Name (optional)"
+            placeholder="Name"
             className={`min-w-0 flex-1 ${FIELD}`}
           />
           <button

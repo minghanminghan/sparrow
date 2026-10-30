@@ -1,13 +1,15 @@
 'use client'
 
 import { useState } from 'react'
+import type { Task } from '@/core/types'
 import Link from 'next/link'
 import { PROJECT_COLORS } from '@/core/colors'
 import { isDone } from '@/core/columns'
 import { useKb, useProject } from '@/client/store'
 import { ProjectSquare } from '@/components/ProjectSquare'
 
-const PAGE_SIZE = 20
+const FIRST_PAGE = 5
+const PAGE_SIZE = 10
 const FIELD = 'rounded border border-gray-300 px-2 py-1 text-sm'
 
 function NameEditor({ projectKey, name }: { projectKey: string; name: string }) {
@@ -35,15 +37,92 @@ function NameEditor({ projectKey, name }: { projectKey: string; name: string }) 
   )
 }
 
+function ColorPicker({ projectKey, color }: { projectKey: string; color?: string }) {
+  const updateProject = useKb((s) => s.updateProject)
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="relative flex">
+      <button onClick={() => setOpen(!open)} aria-label="Change color" className="flex p-1">
+        <ProjectSquare color={color} size="h-3 w-3" />
+      </button>
+      {open && (
+        <>
+          <button aria-label="Close" className="fixed inset-0 z-10 cursor-default" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-20 mt-1 flex w-max gap-2 rounded border border-gray-200 bg-white p-2 shadow">
+            {PROJECT_COLORS.map((c) => (
+              <button
+                key={c}
+                onClick={() => {
+                  setOpen(false)
+                  void updateProject(projectKey, { color: c }).catch(() => {})
+                }}
+                aria-label={`Color ${c}`}
+                className={`h-6 w-6 rounded ${c === color ? 'ring-2 ring-gray-900 ring-offset-2' : ''}`}
+                style={{ background: c }}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function StatusGroup({ name, tasks, color, done }: { name: string; tasks: Task[]; color?: string; done: boolean }) {
+  const openPanel = useKb((s) => s.openPanel)
+  const [limit, setLimit] = useState(done ? 0 : FIRST_PAGE)
+  const shown = tasks.slice(0, limit)
+  const rest = tasks.length - shown.length
+
+  return (
+    <section className="space-y-1">
+      <button
+        onClick={() => setLimit(limit ? 0 : FIRST_PAGE)}
+        className="flex items-center gap-2 text-sm font-semibold text-gray-700"
+      >
+        <span className="w-3 text-gray-400">{limit ? '▾' : '▸'}</span>
+        {name}
+        <span className="font-normal text-gray-400">{tasks.length}</span>
+      </button>
+      {limit > 0 && (
+        <ul className="divide-y divide-gray-100 rounded border border-gray-200">
+          {shown.map((t) => (
+            <li key={t.id}>
+              <button
+                onClick={() => openPanel(t.id)}
+                data-opens-task
+                className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-gray-50"
+              >
+                <span className="flex w-20 shrink-0 items-center gap-1 font-mono text-xs text-gray-400">
+                  <ProjectSquare color={color} />
+                  {t.id}
+                </span>
+                <span className="min-w-0 flex-1 truncate font-medium text-gray-900">{t.title}</span>
+                {t.due && <span className="shrink-0 text-xs text-gray-500">{t.due}</span>}
+              </button>
+            </li>
+          ))}
+          {rest > 0 && (
+            <li>
+              <button
+                onClick={() => setLimit(limit + PAGE_SIZE)}
+                className="w-full px-3 py-2 text-left text-xs text-gray-500 hover:bg-gray-50"
+              >
+                Show {Math.min(rest, PAGE_SIZE)} more ({rest} left)
+              </button>
+            </li>
+          )}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 export function ProjectPage({ projectKey }: { projectKey: string }) {
   const index = useKb((s) => s.index)
   const project = useProject(projectKey)
-  const updateProject = useKb((s) => s.updateProject)
-  const openPanel = useKb((s) => s.openPanel)
   const [q, setQ] = useState('')
-  const [status, setStatus] = useState('')
-  const [showDone, setShowDone] = useState(false)
-  const [page, setPage] = useState(0)
 
   if (!index) return <div className="p-8 text-sm text-gray-500">Loading…</div>
   if (!project) {
@@ -61,97 +140,26 @@ export function ProjectPage({ projectKey }: { projectKey: string }) {
   const needle = q.trim().toLowerCase()
   const tasks = index.tasks
     .filter((t) => t.project === project.key)
-    .filter((t) => !status || t.status === status)
-    .filter((t) => showDone || status || !isDone(config, t.status))
     .filter((t) => !needle || t.id.toLowerCase().includes(needle) || t.title.toLowerCase().includes(needle))
     .sort((a, b) => (a.updated < b.updated ? 1 : a.updated > b.updated ? -1 : 0))
-  const pages = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE))
-  const current = Math.min(page, pages - 1)
-  const shown = tasks.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE)
-  // Any filter change goes back to the first page.
-  const filter = <T,>(set: (v: T) => void) => (v: T) => {
-    set(v)
-    setPage(0)
-  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4">
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <ProjectSquare color={project.color} size="h-3 w-3" />
-          <span className="font-mono text-sm font-medium text-gray-400">
-            {project.key}
-          </span>
-          <NameEditor key={project.name} projectKey={project.key} name={project.name} />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {PROJECT_COLORS.map((c) => (
-            <button
-              key={c}
-              onClick={() => void updateProject(project.key, { color: c }).catch(() => {})}
-              aria-label={`Color ${c}`}
-              className={`h-6 w-6 rounded ${c === project.color ? 'ring-2 ring-gray-900 ring-offset-2' : ''}`}
-              style={{ background: c }}
-            />
-          ))}
-        </div>
+      <div className="flex items-center gap-1">
+        <ColorPicker projectKey={project.key} color={project.color} />
+        <span className="font-mono text-sm font-medium text-gray-400">{project.key}</span>
+        <NameEditor key={project.name} projectKey={project.key} name={project.name} />
       </div>
-
-      <section className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
-          <input
-            value={q}
-            onChange={(e) => filter(setQ)(e.target.value)}
-            placeholder="Search"
-            className={`min-w-0 flex-1 ${FIELD}`}
-          />
-          <select value={status} onChange={(e) => filter(setStatus)(e.target.value)} className={FIELD}>
-            <option value="">All</option>
-            {config.columns.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <label className="flex items-center gap-1">
-            <input type="checkbox" checked={showDone} onChange={(e) => filter(setShowDone)(e.target.checked)} />
-            Show done
-          </label>
-        </div>
-        <ul className="divide-y divide-gray-100 rounded border border-gray-200">
-          {shown.map((t) => (
-            <li key={t.id}>
-              <button
-                onClick={() => openPanel(t.id)}
-                data-opens-task
-                className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-gray-50"
-              >
-                <span className="flex w-20 shrink-0 items-center gap-1 font-mono text-xs text-gray-400">
-                  <ProjectSquare color={project.color} />
-                  {t.id}
-                </span>
-                <span className="min-w-0 flex-1 truncate font-medium text-gray-900">{t.title}</span>
-                <span className="shrink-0 text-xs text-gray-500">
-                  {config.columns.find((c) => c.key === t.status)?.name ?? t.status}
-                </span>
-                {t.due && <span className="shrink-0 text-xs text-gray-500">{t.due}</span>}
-              </button>
-            </li>
-          ))}
-          {shown.length === 0 && <li className="px-3 py-2 text-sm text-gray-500">No tasks</li>}
-        </ul>
-        <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>{tasks.length ? `${current * PAGE_SIZE + 1}–${current * PAGE_SIZE + shown.length} of ${tasks.length}` : '0 of 0'}</span>
-          <span className="flex gap-3">
-            <button onClick={() => setPage(current - 1)} disabled={current === 0} className="disabled:opacity-40">
-              ‹ Prev
-            </button>
-            <button onClick={() => setPage(current + 1)} disabled={current >= pages - 1} className="disabled:opacity-40">
-              Next ›
-            </button>
-          </span>
-        </div>
-      </section>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className={`w-full ${FIELD}`} />
+      {config.columns.map((c) => {
+        const group = tasks.filter((t) => t.status === c.key)
+        if (!group.length) return null
+        // A new search remounts the group so its page size starts over.
+        return (
+          <StatusGroup key={`${c.key}:${needle}`} name={c.name} tasks={group} color={project.color} done={isDone(config, c.key)} />
+        )
+      })}
+      {tasks.length === 0 && <div className="text-sm text-gray-500">No tasks</div>}
     </div>
   )
 }
