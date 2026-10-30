@@ -2,6 +2,7 @@ import { loadAttachments } from './attachments'
 import { columnByRole, isDone, loadConfig } from './config'
 import type { Db } from './db'
 import { hash } from './format'
+import { MENTION_RE } from './keys'
 import { loadTasks } from './store'
 import type { Attachment, Config, Task } from './types'
 
@@ -17,8 +18,6 @@ export type TaskView = Task & {
 }
 export type Index = { config: Config; tasks: TaskView[] }
 
-const MENTION_RE = /\[\[(\d+)\]\]/g
-
 const REVERSE_LINK: Record<Task['links'][number]['type'], Backlink['type']> = {
   blocks: 'blocked-by',
   relates: 'relates',
@@ -26,8 +25,8 @@ const REVERSE_LINK: Record<Task['links'][number]['type'], Backlink['type']> = {
 
 function mentionsIn(task: Task): string[] {
   const ids = new Set<string>()
-  for (const m of task.body.matchAll(MENTION_RE)) ids.add(m[1])
-  for (const c of task.comments) for (const m of c.body.matchAll(MENTION_RE)) ids.add(m[1])
+  for (const m of task.body.matchAll(MENTION_RE)) ids.add(m[1].toUpperCase())
+  for (const c of task.comments) for (const m of c.body.matchAll(MENTION_RE)) ids.add(m[1].toUpperCase())
   return [...ids]
 }
 

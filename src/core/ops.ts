@@ -4,7 +4,8 @@ import { tx } from './db'
 import type { Db } from './db'
 import { KbError } from './errors'
 import { hash } from './format'
-import { loadTasks, saveTask } from './store'
+import { normalizeProjectKey, normalizeTaskKey, splitTaskKey } from './keys'
+import { loadTasks, rowIdOf, saveTask } from './store'
 import type { Config, Link, Ref, Task } from './types'
 
 export type Op =
@@ -23,6 +24,7 @@ export type Op =
 
 export type CreateInput = {
   title: string
+  project?: string
   status?: string
   parent?: string
   due?: string
@@ -35,12 +37,10 @@ export type CreateInput = {
 
 export const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 
-const ID_RE = /^\d+$/
-
 export function readTask(db: Db, id: string): Task {
-  if (!ID_RE.test(id)) throw new KbError('usage', `invalid task id "${id}"`)
-  const task = loadTasks(db, id)[0]
-  if (!task) throw new KbError('not_found', `task ${id} not found`)
+  const key = normalizeTaskKey(id)
+  const task = loadTasks(db, key)[0]
+  if (!task) throw new KbError('not_found', `task ${key} not found`)
   return task
 }
 
@@ -69,17 +69,26 @@ function checkHash(field: string, current: string, baseHash?: string): void {
   }
 }
 
-function checkParent(db: Db, id: string, parent: string): void {
-  readTask(db, parent)
-  const parentOf = db.prepare('SELECT parent FROM tasks WHERE id = ? AND deleted_at IS NULL')
+function checkSameProject(project: string, parent: Task): void {
+  if (parent.project !== project) throw new KbError('usage', `${project} task cannot have parent ${parent.id} from another project`)
+}
+
+function checkParent(db: Db, task: Task, parent: string): void {
+  checkSameProject(task.project, readTask(db, parent))
+  const parentOf = db.prepare(
+    "SELECT p.project || '-' || p.number AS key FROM tasks c JOIN tasks p ON p.id = c.parent WHERE c.project = ? AND c.number = ? AND c.deleted_at IS NULL",
+  )
   const seen = new Set<string>()
   for (let cur: string | undefined = parent; cur && !seen.has(cur); ) {
-    if (cur === id) throw new KbError('usage', `setting parent ${parent} on ${id} would create a cycle`)
+    if (cur === task.id) throw new KbError('usage', `setting parent ${parent} on ${task.id} would create a cycle`)
     seen.add(cur)
-    const row = parentOf.get(cur) as { parent: number | null } | undefined
-    cur = row?.parent == null ? undefined : String(row.parent)
+    const { project, number } = splitTaskKey(cur)
+    const row = parentOf.get(project, number) as { key: string } | undefined
+    cur = row?.key
   }
 }
+
+const normalizeLink = (link: Link): Link => ({ type: link.type, id: normalizeTaskKey(link.id) })
 
 function apply(db: Db, config: Config, task: Task, op: Op, at: string): void {
   switch (op.type) {
@@ -91,10 +100,12 @@ function apply(db: Db, config: Config, task: Task, op: Op, at: string): void {
     case 'setDue':
       task.due = op.due ?? undefined
       return
-    case 'setParent':
-      if (op.parent) checkParent(db, task.id, op.parent)
-      task.parent = op.parent ?? undefined
+    case 'setParent': {
+      const parent = op.parent ? normalizeTaskKey(op.parent) : undefined
+      if (parent) checkParent(db, task, parent)
+      task.parent = parent
       return
+    }
     case 'setTitle':
       checkHash('title', task.title, op.baseHash)
       task.title = op.title
@@ -103,13 +114,17 @@ function apply(db: Db, config: Config, task: Task, op: Op, at: string): void {
       checkHash('body', task.body, op.baseHash)
       task.body = op.body
       return
-    case 'addLink':
-      if (op.link.id === task.id) throw new KbError('usage', 'a task cannot link to itself')
-      if (!task.links.some((l) => l.type === op.link.type && l.id === op.link.id)) task.links.push(op.link)
+    case 'addLink': {
+      const link = normalizeLink(op.link)
+      if (link.id === task.id) throw new KbError('usage', 'a task cannot link to itself')
+      if (!task.links.some((l) => l.type === link.type && l.id === link.id)) task.links.push(link)
       return
-    case 'removeLink':
-      task.links = task.links.filter((l) => !(l.type === op.link.type && l.id === op.link.id))
+    }
+    case 'removeLink': {
+      const link = normalizeLink(op.link)
+      task.links = task.links.filter((l) => !(l.type === link.type && l.id === link.id))
       return
+    }
     case 'addRef':
       if (!task.refs.some((r) => r.url === op.ref.url)) task.refs.push(op.ref)
       return
@@ -142,21 +157,37 @@ export function createTask(db: Db, input: CreateInput): Task {
   const config = loadConfig(db)
   return tx(db, () => {
     if (input.clientId) {
-      const row = db.prepare('SELECT id, deleted_at FROM tasks WHERE client_id = ?').get(input.clientId) as { id: number; deleted_at: string | null } | undefined
-      if (row?.deleted_at) throw new KbError('not_found', `task ${row.id} not found`)
-      if (row) return readTask(db, String(row.id))
+      const row = db.prepare("SELECT project || '-' || number AS key, deleted_at FROM tasks WHERE client_id = ?").get(input.clientId) as
+        | { key: string; deleted_at: string | null }
+        | undefined
+      if (row?.deleted_at) throw new KbError('not_found', `task ${row.key} not found`)
+      if (row) return readTask(db, row.key)
     }
-    if (input.parent) readTask(db, input.parent)
+    let project = input.project ? normalizeProjectKey(input.project) : undefined
+    const parent = input.parent ? readTask(db, input.parent) : undefined
+    if (parent) {
+      if (project) checkSameProject(project, parent)
+      project = parent.project
+    }
+    if (!project) {
+      const keys = (db.prepare('SELECT key FROM projects ORDER BY key').all() as { key: string }[]).map((r) => r.key)
+      throw new KbError('usage', `a project is required (one of: ${keys.join(', ')})`)
+    }
+    const next = db.prepare('UPDATE projects SET next_number = next_number + 1 WHERE key = ? RETURNING next_number - 1 AS n').get(project) as
+      | { n: number }
+      | undefined
+    if (!next) throw new KbError('not_found', `project ${project} not found`)
     const status = input.status ?? columnByRole(config, 'ready').key
     const at = now()
     const task: Task = {
-      id: '',
+      id: `${project}-${next.n}`,
+      project,
       title: input.title,
       status,
       rank: '',
-      parent: input.parent,
+      parent: parent?.id,
       due: input.due,
-      links: input.links ?? [],
+      links: (input.links ?? []).map(normalizeLink),
       refs: input.refs ?? [],
       created: at,
       updated: at,
@@ -166,15 +197,15 @@ export function createTask(db: Db, input: CreateInput): Task {
     }
     setStatus(config, task, status, at)
     task.rank = input.rank ?? rankAtEnd(db, status)
-    task.id = saveTask(db, task)
-    if (input.clientId) db.prepare('UPDATE tasks SET client_id = ? WHERE id = ?').run(input.clientId, task.id)
+    saveTask(db, task)
+    if (input.clientId) db.prepare('UPDATE tasks SET client_id = ? WHERE id = ?').run(input.clientId, rowIdOf(db, task.id))
     return task
   })
 }
 
 export function deleteTask(db: Db, id: string): void {
   tx(db, () => {
-    readTask(db, id)
-    db.prepare('UPDATE tasks SET deleted_at = ? WHERE id = ?').run(now(), id)
+    const task = readTask(db, id)
+    db.prepare('UPDATE tasks SET deleted_at = ? WHERE id = ?').run(now(), rowIdOf(db, task.id))
   })
 }

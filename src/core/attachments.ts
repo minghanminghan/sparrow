@@ -6,6 +6,7 @@ import type { Db } from './db'
 import { KbError } from './errors'
 import { MAX_ATTACHMENT_BYTES, mimeFor } from './mime'
 import { now, readTask } from './ops'
+import { rowIdOf } from './store'
 import type { Attachment } from './types'
 
 export function attachmentsDir(): string {
@@ -28,14 +29,16 @@ const toAttachment = (r: Record<string, unknown>): Attachment => ({
   created: String(r.created),
 })
 
-// Attachments of live tasks, grouped by task id.
+// Attachments of live tasks, grouped by task key.
 export function loadAttachments(db: Db): Map<string, Attachment[]> {
   const rows = db
-    .prepare('SELECT a.* FROM attachments a JOIN tasks t ON t.id = a.task_id WHERE t.deleted_at IS NULL ORDER BY a.created, a.rowid')
+    .prepare(
+      "SELECT a.*, t.project || '-' || t.number AS task_key FROM attachments a JOIN tasks t ON t.id = a.task_id WHERE t.deleted_at IS NULL ORDER BY a.created, a.rowid",
+    )
     .all() as Record<string, unknown>[]
   const out = new Map<string, Attachment[]>()
   for (const r of rows) {
-    const id = String(r.task_id)
+    const id = String(r.task_key)
     if (!out.has(id)) out.set(id, [])
     out.get(id)!.push(toAttachment(r))
   }
@@ -48,7 +51,8 @@ export function addAttachment(
   file: { filename: string; mime?: string; data: Uint8Array },
   dir = attachmentsDir(),
 ): Attachment {
-  readTask(db, taskId)
+  const key = readTask(db, taskId).id
+  const rowId = rowIdOf(db, key)
   if (file.data.byteLength > MAX_ATTACHMENT_BYTES) throw new KbError('invalid', 'attachment exceeds 25 MB')
   const filename = cleanName(file.filename)
   const mime = file.mime && MIME_RE.test(file.mime) ? file.mime.toLowerCase() : mimeFor(filename)
@@ -58,23 +62,23 @@ export function addAttachment(
   tx(db, () => {
     db.prepare('INSERT INTO attachments (id, task_id, filename, mime, size, created) VALUES (?, ?, ?, ?, ?, ?)').run(
       att.id,
-      taskId,
+      rowId,
       att.filename,
       att.mime,
       att.size,
       att.created,
     )
-    db.prepare('UPDATE tasks SET updated = ? WHERE id = ?').run(att.created, taskId)
+    db.prepare('UPDATE tasks SET updated = ? WHERE id = ?').run(att.created, rowId)
   })
   return att
 }
 
 export function getAttachment(db: Db, taskId: string, attId: string, dir = attachmentsDir()): Attachment & { file: string } {
-  readTask(db, taskId)
-  const row = db.prepare('SELECT * FROM attachments WHERE id = ? AND task_id = ?').get(attId, taskId) as
+  const key = readTask(db, taskId).id
+  const row = db.prepare('SELECT * FROM attachments WHERE id = ? AND task_id = ?').get(attId, rowIdOf(db, key)) as
     | Record<string, unknown>
     | undefined
-  if (!row) throw new KbError('not_found', `attachment ${attId} not found on task ${taskId}`)
+  if (!row) throw new KbError('not_found', `attachment ${attId} not found on task ${key}`)
   const att = toAttachment(row)
   return { ...att, file: path.join(dir, att.id) }
 }
@@ -83,10 +87,11 @@ export function getAttachment(db: Db, taskId: string, attId: string, dir = attac
 // its 7-day clock, so backups taken before the removal can still be restored.
 export function removeAttachment(db: Db, taskId: string, attId: string, dir = attachmentsDir()): void {
   tx(db, () => {
-    readTask(db, taskId)
-    const res = db.prepare('DELETE FROM attachments WHERE id = ? AND task_id = ?').run(attId, taskId)
-    if (res.changes === 0) throw new KbError('not_found', `attachment ${attId} not found on task ${taskId}`)
-    db.prepare('UPDATE tasks SET updated = ? WHERE id = ?').run(now(), taskId)
+    const key = readTask(db, taskId).id
+    const rowId = rowIdOf(db, key)
+    const res = db.prepare('DELETE FROM attachments WHERE id = ? AND task_id = ?').run(attId, rowId)
+    if (res.changes === 0) throw new KbError('not_found', `attachment ${attId} not found on task ${key}`)
+    db.prepare('UPDATE tasks SET updated = ? WHERE id = ?').run(now(), rowId)
   })
   const file = path.join(dir, attId)
   if (fs.existsSync(file)) fs.utimesSync(file, new Date(), new Date())

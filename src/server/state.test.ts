@@ -17,14 +17,14 @@ describe('state', () => {
   test('revOf is stable for the same index and changes after a create', () => {
     const { state } = setup()
     expect(revOf(buildIndex(state.db))).toBe(state.rev)
-    createTask(state.db, { title: 'a' })
+    createTask(state.db, { project: 'SPAR', title: 'a' })
     expect(revOf(buildIndex(state.db))).not.toBe(state.rev)
   })
 
   test('refresh emits upserts then one rev event equal to state.rev', () => {
     const { state, events } = setup()
     const before = state.rev
-    createTask(state.db, { title: 'a' })
+    createTask(state.db, { project: 'SPAR', title: 'a' })
     refresh(state)
     expect(events.map((e) => e.type)).toEqual(['upsert', 'rev'])
     expect(events.at(-1)).toEqual({ type: 'rev', rev: state.rev })
