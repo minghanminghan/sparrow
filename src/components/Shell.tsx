@@ -35,7 +35,7 @@ export function Shell({ children, env, version }: { children: ReactNode; env?: E
   const searchRef = useRef<HTMLInputElement>(null)
   const filtered = useKb((s) => {
     const f = s.filters
-    return Boolean(f.q || f.hideSubtasks || f.due || f.showDone)
+    return Boolean(f.q || f.hideSubtasks || f.due || f.showDone || f.projects.length)
   })
   const [filterOpen, setFilterOpen] = useState(false)
   // Only the board has a phone layout; other pages keep the desktop header at every width.

@@ -26,7 +26,7 @@ export function MobileBoard() {
   const lists = columns.map((c) => ({
     column: c,
     tasks: visibleColumnTasks(index, filters, c.key),
-    pending: pendingForColumn(pending, readyKey, c.key),
+    pending: pendingForColumn(pending, readyKey, c.key, filters.projects),
   }))
   const current = lists.find((l) => l.column.key === active)!
 

@@ -1,14 +1,16 @@
 import { create } from 'zustand'
 import { isDone } from '@/core/columns'
-import type { Config, CreateInput, Index, Op, TaskView } from '@/core'
+import type { Config, CreateInput, Index, Op, Project, TaskView } from '@/core'
 import type { Env } from '@/core/env'
 import type { ServerEvent } from '@/server/state'
 import {
   ApiError,
   applyOp as apiApplyOp,
+  createProject as apiCreateProject,
   createTask as apiCreateTask,
   removeAttachment as apiRemoveAttachment,
   removeTask as apiRemoveTask,
+  updateProject as apiUpdateProject,
   uploadAttachment as apiUploadAttachment,
 } from './api'
 import { loadCachedIndex, saveCachedIndex } from './cache'
@@ -20,6 +22,8 @@ export type Filters = {
   hideSubtasks: boolean
   due?: 'overdue' | 'week'
   showDone: boolean
+  // Project keys in the order they were picked; empty shows every project.
+  projects: string[]
 }
 
 type Toast = { id: string; message: string }
@@ -51,6 +55,9 @@ type KbStore = {
   remove(id: string): Promise<void>
   attach(id: string, file: File): Promise<void>
   detach(id: string, attId: string): Promise<void>
+  // The board picks up the change from the SSE snapshot.
+  createProject(input: { key: string; name?: string }): Promise<Project>
+  updateProject(key: string, patch: { name?: string; color?: string }): Promise<Project>
   openPanel(id: string | null): void
   openCreate(v: { status?: string } | null): void
   setFilters(p: Partial<Filters>): void
@@ -133,7 +140,7 @@ export const useKb = create<KbStore>()((set, get) => {
     offline: false,
     savedAt: null,
     rev: null,
-    filters: { q: '', hideSubtasks: false, showDone: false },
+    filters: { q: '', hideSubtasks: false, showDone: false, projects: [] },
     panelId: null,
     createFor: null,
     toasts: [],
@@ -373,6 +380,24 @@ export const useKb = create<KbStore>()((set, get) => {
       return settle(apiRemoveAttachment(id, attId))
     },
 
+    async createProject(input) {
+      try {
+        return await apiCreateProject(input)
+      } catch (err) {
+        pushToast(err instanceof Error ? err.message : String(err))
+        throw err
+      }
+    },
+
+    async updateProject(key, patch) {
+      try {
+        return await apiUpdateProject(key, patch)
+      } catch (err) {
+        pushToast(err instanceof Error ? err.message : String(err))
+        throw err
+      }
+    },
+
     openPanel(id) {
       set({ panelId: id })
     },
@@ -390,6 +415,10 @@ export const useKb = create<KbStore>()((set, get) => {
     },
   }
 })
+
+export function useProject(key: string | undefined): Project | undefined {
+  return useKb((s) => (key ? s.index?.projects.find((p) => p.key === key) : undefined))
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -413,6 +442,8 @@ export function applyFilters(tasks: TaskView[], f: Filters, config: Config): Tas
   if (q) result = result.filter((t) => t.id.toLowerCase().includes(q) || t.title.toLowerCase().includes(q))
 
   if (f.hideSubtasks) result = result.filter((t) => !t.parent)
+
+  if (f.projects.length) result = result.filter((t) => f.projects.includes(t.project))
 
   if (f.due) {
     const today = todayLocalDay()
