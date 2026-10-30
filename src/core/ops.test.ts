@@ -160,3 +160,14 @@ test('links may cross projects', () => {
   applyOp(db, n.id, { type: 'addLink', link: { type: 'blocks', id: 'spar-1' } })
   expect(viewTask(buildIndex(db), a.id)!.backlinks).toEqual([{ type: 'blocked-by', id: 'NEWS-1' }])
 })
+
+test('migration 5 drops links to tasks that never existed', () => {
+  const db = connect(':memory:')
+  for (let v = 1; v <= 4; v++) db.exec(MIGRATIONS[v - 1] as string)
+  db.exec('PRAGMA user_version = 4')
+  db.exec("INSERT INTO tasks (id, title, status, rank, created, updated) VALUES (1, 'a', 'todo', 'a0', 'x', 'x')")
+  db.exec("INSERT INTO links VALUES (1, 'relates', 99)")
+  migrate(db)
+  expect(readTask(db, 'SPAR-1').links).toEqual([])
+  expect(applyOp(db, 'SPAR-1', { type: 'setTitle', title: 'b' }).title).toBe('b')
+})

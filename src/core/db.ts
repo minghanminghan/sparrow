@@ -69,6 +69,7 @@ export const MIGRATIONS: (string | ((db: Db) => void))[] = [
   `,
   `ALTER TABLE tasks DROP COLUMN assignee;`,
   // Tasks join projects. Existing tasks become SPAR-<id>, and [[N]] mentions become [[SPAR-N]].
+  // Links to ids that never existed are dropped: a key has to point at a row.
   // No REFERENCES on tasks.project: SQLite forbids it with a non-null default while foreign keys are on.
   (db) => {
     db.exec(`
@@ -78,6 +79,7 @@ export const MIGRATIONS: (string | ((db: Db) => void))[] = [
     ALTER TABLE tasks ADD COLUMN number INTEGER;
     UPDATE tasks SET number = id;
     CREATE UNIQUE INDEX tasks_project_number ON tasks (project, number);
+    DELETE FROM links WHERE target_id NOT IN (SELECT id FROM tasks);
     `)
     for (const table of ['tasks', 'comments']) {
       const update = db.prepare(`UPDATE ${table} SET body = ? WHERE id = ?`)
