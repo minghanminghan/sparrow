@@ -3,7 +3,8 @@
 import { memo } from 'react'
 import type { MouseEvent } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { useKb } from '@/client/store'
+import { useKb, useProject } from '@/client/store'
+import { ProjectSquare } from '@/components/ProjectSquare'
 
 type RowProps = {
   id: string
@@ -26,6 +27,7 @@ function RowImpl({ id, depth, dimmed, selected, hasChildren, collapsed, onToggle
   const op = useKb((s) => s.op)
   const openPanel = useKb((s) => s.openPanel)
   const columns = useKb((s) => s.index?.config.columns)
+  const color = useProject(task?.project)?.color
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
 
   if (!task || !columns) return null
@@ -68,7 +70,10 @@ function RowImpl({ id, depth, dimmed, selected, hasChildren, collapsed, onToggle
       ) : (
         <span className="w-4 shrink-0" />
       )}
-      <span className="w-16 shrink-0 font-mono text-xs text-gray-400">{task.id}</span>
+      <span className="flex w-20 shrink-0 items-center gap-1 font-mono text-xs text-gray-400">
+        <ProjectSquare color={color} />
+        {task.id}
+      </span>
       <button
         onClick={(e) => {
           e.stopPropagation()

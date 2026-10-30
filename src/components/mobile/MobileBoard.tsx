@@ -6,12 +6,14 @@ import { useKb } from '@/client/store'
 import { PendingCard } from '@/components/PendingCard'
 import { Card } from '@/components/board/Card'
 import { pendingForColumn, visibleColumnTasks } from '@/components/board/visibleTasks'
+import { ProjectSquare } from '@/components/ProjectSquare'
 
 const TAB_KEY = 'sparrow:tab'
 
 export function MobileBoard() {
   const index = useKb((s) => s.index)
   const filters = useKb((s) => s.filters)
+  const setFilters = useKb((s) => s.setFilters)
   const pending = useKb((s) => s.pending)
   const openCreate = useKb((s) => s.openCreate)
   const [tab, setTab] = useState(() => (typeof window === 'undefined' ? null : sessionStorage.getItem(TAB_KEY)))
@@ -26,7 +28,7 @@ export function MobileBoard() {
   const lists = columns.map((c) => ({
     column: c,
     tasks: visibleColumnTasks(index, filters, c.key),
-    pending: pendingForColumn(pending, readyKey, c.key),
+    pending: pendingForColumn(pending, readyKey, c.key, filters.projects),
   }))
   const current = lists.find((l) => l.column.key === active)!
 
@@ -48,6 +50,23 @@ export function MobileBoard() {
           </button>
         ))}
       </div>
+      {filters.projects.length > 0 && (
+        <div className="flex flex-wrap gap-2 border-b border-gray-200 bg-white px-3 py-2">
+          {filters.projects.map((key) => (
+            <span key={key} className="flex items-center gap-1 rounded-full border border-gray-200 py-0.5 pr-1 pl-2 font-mono text-xs">
+              <ProjectSquare color={index.projects.find((p) => p.key === key)?.color} />
+              {key}
+              <button
+                onClick={() => setFilters({ projects: filters.projects.filter((k) => k !== key) })}
+                aria-label={`Remove ${key} from the filter`}
+                className="px-1 text-gray-400"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex flex-1 flex-col gap-2 bg-gray-50 p-2 pb-28">
         {current.pending.map((e) => (
           <PendingCard key={e.clientId} entry={e} />

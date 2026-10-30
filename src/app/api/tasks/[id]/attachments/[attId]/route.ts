@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { getAttachment, isInlineImage, KbError, removeAttachment, viewTask } from '@/core'
+import { getAttachment, isInlineImage, KbError, normalizeTaskKey, removeAttachment, viewTask } from '@/core'
 import { errorResponse, getState, refresh } from '@/server/state'
 
 export const runtime = 'nodejs'
@@ -10,7 +10,8 @@ type Params = { params: Promise<{ id: string; attId: string }> }
 export async function GET(_req: Request, { params }: Params): Promise<Response> {
   try {
     const { id, attId } = await params
-    const att = getAttachment(getState().db, id, attId)
+    const key = normalizeTaskKey(id)
+    const att = getAttachment(getState().db, key, attId)
     if (!fs.existsSync(att.file)) throw new KbError('not_found', `attachment ${attId} file is missing`)
     const inline = isInlineImage(att.mime)
     const ascii = att.filename.replace(/[^\x20-\x7e]|["\\]/g, '_')
@@ -31,10 +32,11 @@ export async function GET(_req: Request, { params }: Params): Promise<Response> 
 export async function DELETE(_req: Request, { params }: Params): Promise<Response> {
   try {
     const { id, attId } = await params
+    const key = normalizeTaskKey(id)
     const state = getState()
-    removeAttachment(state.db, id, attId)
+    removeAttachment(state.db, key, attId)
     refresh(state)
-    return Response.json(viewTask(state.index, id))
+    return Response.json(viewTask(state.index, key))
   } catch (err) {
     return errorResponse(err)
   }

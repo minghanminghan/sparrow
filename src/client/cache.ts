@@ -7,8 +7,9 @@ export type CachedIndex = { index: Index; rev: string; savedAt: number; version:
 
 const KEY = () => storageKey('index')
 
+// A cache from before projects has numeric task ids and no project list, so it is dropped even within a major.
 export function usableCache(c: CachedIndex | null, appVersion: string): CachedIndex | null {
-  return c && compareVersions(c.version, appVersion) !== 'incompatible' ? c : null
+  return c && Array.isArray(c.index.projects) && compareVersions(c.version, appVersion) !== 'incompatible' ? c : null
 }
 
 export async function loadCachedIndex(): Promise<CachedIndex | null> {

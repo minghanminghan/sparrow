@@ -13,7 +13,7 @@ export default defineConfig([
   { ...common, entry: { cli: "src/cli/index.ts" }, noExternal: [/.*/] },
   {
     ...common,
-    entry: { import: "src/cli/import.ts", migrate: "src/cli/migrate.ts", backup: "src/cli/backup.ts" },
+    entry: { migrate: "src/cli/migrate.ts", backup: "src/cli/backup.ts" },
     external: Object.keys(pkg.dependencies ?? {}),
   },
 ]);

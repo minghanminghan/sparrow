@@ -2,8 +2,10 @@ import { loadAttachments } from './attachments'
 import { columnByRole, isDone, loadConfig } from './config'
 import type { Db } from './db'
 import { hash } from './format'
+import { MENTION_RE } from './keys'
+import { loadProjects } from './projects'
 import { loadTasks } from './store'
-import type { Attachment, Config, Task } from './types'
+import type { Attachment, Config, Project, Task } from './types'
 
 export type Backlink = { type: 'blocked-by' | 'relates' | 'mentioned-in'; id: string; done?: true }
 export type TaskView = Task & {
@@ -15,9 +17,7 @@ export type TaskView = Task & {
   progress: { done: number; total: number }
   attachments: Attachment[]
 }
-export type Index = { config: Config; tasks: TaskView[] }
-
-const MENTION_RE = /\[\[(\d+)\]\]/g
+export type Index = { config: Config; projects: Project[]; tasks: TaskView[] }
 
 const REVERSE_LINK: Record<Task['links'][number]['type'], Backlink['type']> = {
   blocks: 'blocked-by',
@@ -26,8 +26,8 @@ const REVERSE_LINK: Record<Task['links'][number]['type'], Backlink['type']> = {
 
 function mentionsIn(task: Task): string[] {
   const ids = new Set<string>()
-  for (const m of task.body.matchAll(MENTION_RE)) ids.add(m[1])
-  for (const c of task.comments) for (const m of c.body.matchAll(MENTION_RE)) ids.add(m[1])
+  for (const m of task.body.matchAll(MENTION_RE)) ids.add(m[1].toUpperCase())
+  for (const c of task.comments) for (const m of c.body.matchAll(MENTION_RE)) ids.add(m[1].toUpperCase())
   return [...ids]
 }
 
@@ -76,7 +76,7 @@ export function buildIndex(db: Db): Index {
 
   views.sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
 
-  return { config, tasks: views }
+  return { config, projects: loadProjects(db), tasks: views }
 }
 
 export function viewTask(index: Index, id: string): TaskView | undefined {

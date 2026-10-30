@@ -108,6 +108,12 @@ function printResult(result: CommandResult, jsonMode: boolean): void {
     case 'deleted':
       console.log(`${result.value.id} deleted`)
       return
+    case 'project':
+      printTable([[result.value.key, result.value.name, result.value.color]])
+      return
+    case 'projects':
+      if (result.value.length) printTable(result.value.map((p) => [p.key, p.name, p.color]))
+      return
     case 'config':
       console.log(`url  ${result.value.url}`)
       return

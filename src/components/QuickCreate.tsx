@@ -8,6 +8,7 @@ import { useKb } from '@/client/store'
 import { shrinkImage } from '@/client/image'
 import { visibleColumnTasks } from '@/components/board/visibleTasks'
 import { LINK_TYPES, LinkPicker } from '@/components/detail/TaskDetail'
+import { ProjectSquare } from '@/components/ProjectSquare'
 
 type Photo = { file: File; url: string }
 
@@ -27,10 +28,13 @@ export function QuickCreate() {
   const openCreate = useKb((s) => s.openCreate)
   const create = useKb((s) => s.create)
   const columns = useKb((s) => s.index?.config.columns)
+  const projects = useKb((s) => s.index?.projects)
   const byId = useKb((s) => s.byId)
   const titleRef = useRef<HTMLInputElement>(null)
   const submitting = useRef(false)
   const [title, setTitle] = useState('')
+  const [project, setProject] = useState('')
+  const startProject = useRef('')
   const [status, setStatus] = useState('')
   const [parent, setParent] = useState('')
   const [due, setDue] = useState('')
@@ -47,6 +51,8 @@ export function QuickCreate() {
   useEffect(() => {
     if (!createFor) return
     setStatus(createFor.status ?? '')
+    startProject.current = useKb.getState().filters.projects[0] ?? ''
+    setProject(startProject.current)
     titleRef.current?.focus()
   }, [createFor])
 
@@ -76,14 +82,15 @@ export function QuickCreate() {
   }
 
   function onClose(): void {
-    const dirty = title || parent || due || body || url || links.length || refs.length || photos.length
+    const dirty =
+      title || parent || due || body || url || links.length || refs.length || photos.length || project !== startProject.current
     if (dirty && !window.confirm('Discard this task?')) return
     close()
   }
 
   async function submit(): Promise<void> {
     const t = title.trim()
-    if (!t || submitting.current) return
+    if (!t || !project || submitting.current) return
     submitting.current = true
     await pending.current
     // Opened from a column: put the new task at the top of it, like the old inline input did.
@@ -95,6 +102,7 @@ export function QuickCreate() {
     try {
       await create({
         title: t,
+        project,
         status: status || undefined,
         rank: first ? rankBetween(undefined, first.rank) : undefined,
         parent: parent.trim() || undefined,
@@ -160,6 +168,25 @@ export function QuickCreate() {
     />
   )
 
+  const projectPicker = (
+    <div className="flex flex-wrap gap-2">
+      {projects?.map((p) => (
+        <button
+          key={p.key}
+          type="button"
+          onClick={() => setProject(p.key)}
+          aria-pressed={p.key === project}
+          className={`flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-xs ${
+            p.key === project ? 'border-gray-900 bg-gray-100 text-gray-900' : 'border-gray-300 text-gray-700'
+          }`}
+        >
+          <ProjectSquare color={p.color} />
+          {p.key}
+        </button>
+      ))}
+    </div>
+  )
+
   const statusSelect = (
     <select value={status} onChange={(e) => setStatus(e.target.value)} className={FIELD}>
       <option value="">Default status</option>
@@ -176,7 +203,7 @@ export function QuickCreate() {
     <input
       value={parent}
       onChange={(e) => setParent(e.target.value)}
-      placeholder="Parent ID (optional)"
+      placeholder="Parent key (optional)"
       className={`flex-1 ${FIELD}`}
     />
   )
@@ -288,12 +315,17 @@ export function QuickCreate() {
             Cancel
           </button>
           <span className="text-sm font-medium">New task</span>
-          <button onClick={() => void submit()} className="rounded bg-gray-900 px-3 py-1 text-sm text-white">
+          <button
+            onClick={() => void submit()}
+            disabled={!project}
+            className="rounded bg-gray-900 px-3 py-1 text-sm text-white disabled:opacity-40"
+          >
             Create
           </button>
         </div>
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
           {titleInput}
+          {projectPicker}
           {bodyInput}
           {photoRow}
           {statusSelect}
@@ -319,6 +351,7 @@ export function QuickCreate() {
         onKeyDown={onKeyDown}
       >
         {titleInput}
+        {projectPicker}
         <div className="flex flex-wrap gap-2">
           {statusSelect}
           {dueInput}
@@ -340,7 +373,8 @@ export function QuickCreate() {
           <span className="text-xs text-gray-400">⌘Enter to create</span>
           <button
             onClick={() => void submit()}
-            className="rounded bg-gray-900 px-3 py-1 text-sm text-white hover:bg-gray-700"
+            disabled={!project}
+            className="rounded bg-gray-900 px-3 py-1 text-sm text-white hover:bg-gray-700 disabled:opacity-40"
           >
             Create
           </button>

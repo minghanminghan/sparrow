@@ -35,7 +35,7 @@ export function Shell({ children, env, version }: { children: ReactNode; env?: E
   const searchRef = useRef<HTMLInputElement>(null)
   const filtered = useKb((s) => {
     const f = s.filters
-    return Boolean(f.q || f.hideSubtasks || f.due || f.showDone)
+    return Boolean(f.q || f.hideSubtasks || f.due || f.showDone || f.projects.length)
   })
   const [filterOpen, setFilterOpen] = useState(false)
   // Only the board has a phone layout; other pages keep the desktop header at every width.
@@ -93,6 +93,9 @@ export function Shell({ children, env, version }: { children: ReactNode; env?: E
             className={pathname === '/tasks' ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'}
           >
             All tasks
+          </Link>
+          <Link href="/p" className={pathname.startsWith('/p') ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'}>
+            Projects
           </Link>
         </nav>
         <span className="text-xs text-gray-400">v{version}</span>

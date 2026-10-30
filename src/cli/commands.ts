@@ -2,11 +2,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { isDone } from '../core/columns'
 import { EXIT, KbError } from '../core/errors'
+import { normalizeProjectKey, normalizeTaskKey } from '../core/keys'
 import type { Index, TaskView } from '../core/indexer'
 import { MAX_ATTACHMENT_BYTES, mimeFor } from '../core/mime'
 import type { CreateInput, Op } from '../core/ops'
 import { rankBetween } from '../core/rank'
-import type { Attachment, LinkType } from '../core/types'
+import type { Attachment, LinkType, Project } from '../core/types'
 import { VERSION, VERSION_HEADER } from '../core/version'
 import { serverUrl } from './config'
 import { api, call, sendJson, toError } from './http'
@@ -27,8 +28,9 @@ export const COMMANDS: CommandDef[] = [
     name: 'list',
     summary: 'List tasks, ordered by rank',
     flags: [
+      { name: 'project', type: 'string', desc: 'filter by project key' },
       { name: 'status', type: 'string', desc: 'filter by status' },
-      { name: 'parent', type: 'string', desc: 'filter by parent id' },
+      { name: 'parent', type: 'string', desc: 'filter by parent key' },
       { name: 'due-before', type: 'string', desc: 'filter: due before YYYY-MM-DD' },
       { name: 'overdue', type: 'boolean', desc: 'filter: due before today (local)' },
       { name: 'tree', type: 'boolean', desc: 'order children under parents' },
@@ -37,13 +39,14 @@ export const COMMANDS: CommandDef[] = [
       { name: 'offset', type: 'string', desc: 'tasks to skip (default 0)' },
     ],
   },
-  { name: 'show', summary: 'Show full task detail', args: '<ID>', flags: [] },
+  { name: 'show', summary: 'Show full task detail', args: '<KEY>', flags: [] },
   {
     name: 'create',
     summary: 'Create a new task',
     flags: [
       { name: 'title', type: 'string', desc: 'task title (required)' },
-      { name: 'parent', type: 'string', desc: 'parent task id' },
+      { name: 'project', type: 'string', desc: 'project key (required unless --parent is given)' },
+      { name: 'parent', type: 'string', desc: 'parent task key' },
       { name: 'status', type: 'string', desc: 'status (default: ready column)' },
       { name: 'due', type: 'string', desc: 'due date YYYY-MM-DD' },
       { name: 'body', type: 'string', desc: 'body text, or "-" for stdin' },
@@ -53,7 +56,7 @@ export const COMMANDS: CommandDef[] = [
   {
     name: 'update',
     summary: 'Update task fields',
-    args: '<ID>',
+    args: '<KEY>',
     flags: [
       { name: 'title', type: 'string', desc: 'new title' },
       { name: 'title-hash', type: 'string', desc: 'expected titleHash, for conflict checking' },
@@ -62,9 +65,9 @@ export const COMMANDS: CommandDef[] = [
       { name: 'body-hash', type: 'string', desc: 'expected bodyHash, for conflict checking' },
       { name: 'status', type: 'string', desc: 'new status' },
       { name: 'due', type: 'string', desc: 'YYYY-MM-DD, or "none" to clear' },
-      { name: 'parent', type: 'string', desc: 'new parent task id' },
-      { name: 'before', type: 'string', desc: 'rank just before this task id, same status' },
-      { name: 'after', type: 'string', desc: 'rank just after this task id, same status' },
+      { name: 'parent', type: 'string', desc: 'new parent task key' },
+      { name: 'before', type: 'string', desc: 'rank just before this task key, same status' },
+      { name: 'after', type: 'string', desc: 'rank just after this task key, same status' },
       { name: 'ref', type: 'string', desc: 'add an external reference URL' },
       { name: 'ref-label', type: 'string', desc: 'label for --ref' },
       { name: 'ref-remove', type: 'boolean', desc: 'remove the --ref URL instead of adding it' },
@@ -73,7 +76,7 @@ export const COMMANDS: CommandDef[] = [
   {
     name: 'comment',
     summary: 'Add a comment to a task',
-    args: '<ID>',
+    args: '<KEY>',
     flags: [
       { name: 'body', type: 'string', desc: 'comment text, or "-" for stdin' },
       { name: 'body-file', type: 'string', desc: 'path to a file with comment text' },
@@ -83,20 +86,26 @@ export const COMMANDS: CommandDef[] = [
   {
     name: 'link',
     summary: 'Add or remove a typed link to another task',
-    args: '<ID>',
+    args: '<KEY>',
     flags: [
-      { name: 'blocks', type: 'string', desc: 'id of the task this one blocks' },
-      { name: 'relates', type: 'string', desc: 'id of a related task' },
+      { name: 'blocks', type: 'string', desc: 'key of the task this one blocks' },
+      { name: 'relates', type: 'string', desc: 'key of a related task' },
       { name: 'remove', type: 'boolean', desc: 'remove the link instead of adding it' },
     ],
   },
   {
     name: 'attach',
     summary: 'Attach a file to a task (max 25 MB), or remove an attachment',
-    args: '<ID> <FILE | ATTACHMENT_ID>',
+    args: '<KEY> <FILE | ATTACHMENT_ID>',
     flags: [{ name: 'remove', type: 'boolean', desc: 'remove the attachment with the given id instead' }],
   },
-  { name: 'delete', summary: 'Delete a task (soft delete; the id is never reused)', args: '<ID>', flags: [] },
+  { name: 'delete', summary: 'Delete a task (soft delete; the key is never reused)', args: '<KEY>', flags: [] },
+  {
+    name: 'project',
+    summary: 'Create or list projects',
+    args: '<create KEY | list>',
+    flags: [{ name: 'name', type: 'string', desc: 'project name (default: the key)' }],
+  },
   { name: 'config', summary: 'Show the server url', flags: [] },
   { name: 'upgrade', summary: "Replace this CLI with the server's version", flags: [] },
   { name: 'help', summary: 'Print this message or the help of the given command', args: '[COMMAND]', flags: [] },
@@ -108,6 +117,8 @@ export type CommandResult =
   | { kind: 'tasks'; value: { total: number; tasks: TaskView[] }; offset: number; lines: { task: TaskView; depth: number }[] }
   | { kind: 'attachment'; value: Attachment }
   | { kind: 'deleted'; value: { id: string; deleted: true } }
+  | { kind: 'project'; value: Project }
+  | { kind: 'projects'; value: Project[] }
   | { kind: 'config'; value: { url: string } }
   | { kind: 'upgraded'; value: { file: string; from: string; to: string } }
   | { kind: 'help'; value: HelpValue }
@@ -115,8 +126,8 @@ export type CommandResult =
 export type HelpValue = { command?: string; commands: CommandDef[]; globalFlags: FlagDef[]; exitCodes: Record<string, number> }
 
 function requireOneId(positionals: string[]): string {
-  if (positionals.length !== 1) throw new KbError('usage', 'expected exactly one task id')
-  return positionals[0]
+  if (positionals.length !== 1) throw new KbError('usage', 'expected exactly one task key')
+  return normalizeTaskKey(positionals[0])
 }
 
 function intFlag(values: Values, name: string, fallback: number): number {
@@ -181,8 +192,15 @@ const postOp = (id: string, op: Op): Promise<TaskView> => sendJson<TaskView>(tas
 function filterTasks(idx: Index, values: Values): TaskView[] {
   let tasks = idx.tasks
   if (!values.all) tasks = tasks.filter((t) => !isDone(idx.config, t.status))
+  if (values.project !== undefined) {
+    const project = normalizeProjectKey(values.project as string)
+    tasks = tasks.filter((t) => t.project === project)
+  }
   if (values.status !== undefined) tasks = tasks.filter((t) => t.status === values.status)
-  if (values.parent !== undefined) tasks = tasks.filter((t) => t.parent === values.parent)
+  if (values.parent !== undefined) {
+    const parent = normalizeTaskKey(values.parent as string)
+    tasks = tasks.filter((t) => t.parent === parent)
+  }
   if (values['due-before'] !== undefined) {
     const before = values['due-before'] as string
     tasks = tasks.filter((t) => t.due !== undefined && t.due < before)
@@ -208,6 +226,7 @@ async function cmdCreate(values: Values): Promise<CommandResult> {
   if (!title) throw new KbError('usage', 'create requires --title')
   const input: CreateInput = {
     title,
+    project: values.project as string | undefined,
     parent: values.parent as string | undefined,
     status: values.status as string | undefined,
     due: values.due as string | undefined,
@@ -216,7 +235,9 @@ async function cmdCreate(values: Values): Promise<CommandResult> {
   return { kind: 'task', value: await sendJson<TaskView>('/api/tasks', 'POST', input) }
 }
 
-async function neighborRank(status: string, selfId: string, beforeId?: string, afterId?: string): Promise<string> {
+async function neighborRank(status: string, selfId: string, before?: string, after?: string): Promise<string> {
+  const beforeId = before === undefined ? undefined : normalizeTaskKey(before)
+  const afterId = after === undefined ? undefined : normalizeTaskKey(after)
   const siblings = (await api<Index>('/api/tasks')).tasks.filter((t) => t.status === status && t.id !== selfId)
   if (beforeId !== undefined) {
     const i = siblings.findIndex((t) => t.id === beforeId)
@@ -275,8 +296,9 @@ async function cmdLink(id: string, values: Values): Promise<CommandResult> {
 }
 
 async function cmdAttach(positionals: string[], values: Values): Promise<CommandResult> {
-  if (positionals.length !== 2) throw new KbError('usage', 'expected a task id and a file (or an attachment id with --remove)')
-  const [id, arg] = positionals
+  if (positionals.length !== 2) throw new KbError('usage', 'expected a task key and a file (or an attachment id with --remove)')
+  const id = normalizeTaskKey(positionals[0])
+  const arg = positionals[1]
   if (values.remove) {
     return { kind: 'task', value: await api<TaskView>(`${taskPath(id)}/attachments/${encodeURIComponent(arg)}`, { method: 'DELETE' }) }
   }
@@ -293,6 +315,16 @@ async function cmdAttach(positionals: string[], values: Values): Promise<Command
 async function cmdDelete(id: string): Promise<CommandResult> {
   await api(taskPath(id), { method: 'DELETE' })
   return { kind: 'deleted', value: { id, deleted: true } }
+}
+
+async function cmdProject(positionals: string[], values: Values): Promise<CommandResult> {
+  const [sub, key, ...rest] = positionals
+  if (sub === 'list' && key === undefined) return { kind: 'projects', value: (await api<Index>('/api/tasks')).projects }
+  if (sub === 'create' && key !== undefined && rest.length === 0) {
+    const input = { key, name: values.name as string | undefined }
+    return { kind: 'project', value: await sendJson<Project>('/api/projects', 'POST', input) }
+  }
+  throw new KbError('usage', 'expected `sparrow project list` or `sparrow project create <KEY> [--name <NAME>]`')
 }
 
 function cmdConfig(positionals: string[]): CommandResult {
@@ -332,6 +364,8 @@ export async function runCommand(name: string, values: Values, positionals: stri
       return cmdAttach(positionals, values)
     case 'delete':
       return cmdDelete(requireOneId(positionals))
+    case 'project':
+      return cmdProject(positionals, values)
     case 'config':
       return cmdConfig(positionals)
     case 'upgrade':

@@ -1,4 +1,4 @@
-import type { CreateInput, ErrorCode, Index, Op, TaskView } from '@/core'
+import type { CreateInput, ErrorCode, Index, Op, Project, TaskView } from '@/core'
 import { VERSION, VERSION_HEADER } from '@/core/version'
 
 export class ApiError extends Error {
@@ -49,4 +49,14 @@ export function uploadAttachment(id: string, file: File, signal?: AbortSignal): 
 
 export function removeAttachment(id: string, attId: string): Promise<TaskView> {
   return fetch(`/api/tasks/${id}/attachments/${attId}`, { method: 'DELETE' }).then((res) => handle<TaskView>(res))
+}
+
+export function createProject(input: { key: string; name?: string }): Promise<Project> {
+  return fetch('/api/projects', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(input) }).then((res) => handle<Project>(res))
+}
+
+export function updateProject(key: string, patch: { name?: string; color?: string }): Promise<Project> {
+  return fetch(`/api/projects/${key}`, { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify(patch) }).then((res) =>
+    handle<Project>(res),
+  )
 }

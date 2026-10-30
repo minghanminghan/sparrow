@@ -4,12 +4,14 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
 import rehypeHighlight from 'rehype-highlight'
+import { MENTION_RE } from '@/core/keys'
 import { useKb } from '@/client/store'
 
-const MENTION_RE = /\[\[(\d+)\]\]/g
-
 function rewriteMentions(src: string): string {
-  return src.replace(MENTION_RE, (_match, id: string) => `[${id}](#task:${id})`)
+  return src.replace(MENTION_RE, (_match, id: string) => {
+    const key = id.toUpperCase()
+    return `[${key}](#task:${key})`
+  })
 }
 
 export function Markdown({ children }: { children: string }) {
