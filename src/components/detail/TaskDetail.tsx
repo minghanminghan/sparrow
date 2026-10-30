@@ -10,6 +10,7 @@ import { formatSize, isInlineImage } from '@/core/mime'
 import { ApiError } from '@/client/api'
 import { useKb, useProject } from '@/client/store'
 import { Markdown } from '@/components/Markdown'
+import { ProjectSquare } from '@/components/ProjectSquare'
 
 const nowIso = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 
@@ -694,12 +695,10 @@ export function TaskDetail({ id, fullPage = false }: { id: string; fullPage?: bo
             href={`/p/${task.project}`}
             className="flex shrink-0 items-center gap-1 self-center rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-600 hover:border-gray-300"
           >
-            <span className="h-2 w-2 rounded-full" style={{ background: project?.color }} />
+            <ProjectSquare color={project?.color} />
             {project?.name ?? task.project}
           </NextLink>
-          <span style={{ color: project?.color }} className="font-mono text-sm font-medium text-gray-400">
-            {task.id}
-          </span>
+          <span className="font-mono text-sm font-medium text-gray-400">{task.id}</span>
           <button
             onClick={() => void copyCmd()}
             title="Copy command"

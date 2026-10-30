@@ -3,6 +3,7 @@
 import { useKb, useProject } from '@/client/store'
 import type { OutboxEntry } from '@/client/outbox'
 import { pendingProject } from '@/components/board/visibleTasks'
+import { ProjectSquare } from '@/components/ProjectSquare'
 
 export function PendingCard({ entry }: { entry: OutboxEntry }) {
   const retryPending = useKb((s) => s.retryPending)
@@ -13,7 +14,8 @@ export function PendingCard({ entry }: { entry: OutboxEntry }) {
   return (
     <div className="rounded-md border border-dashed border-gray-300 bg-white p-2 text-sm opacity-70">
       {project && (
-        <div style={{ color }} className="font-mono text-xs text-gray-400">
+        <div className="flex items-center gap-1 font-mono text-xs text-gray-400">
+          <ProjectSquare color={color} />
           {project}-…
         </div>
       )}

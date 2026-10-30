@@ -6,6 +6,7 @@ import { useKb } from '@/client/store'
 import { PendingCard } from '@/components/PendingCard'
 import { Card } from '@/components/board/Card'
 import { pendingForColumn, visibleColumnTasks } from '@/components/board/visibleTasks'
+import { ProjectSquare } from '@/components/ProjectSquare'
 
 const TAB_KEY = 'sparrow:tab'
 
@@ -53,7 +54,7 @@ export function MobileBoard() {
         <div className="flex flex-wrap gap-2 border-b border-gray-200 bg-white px-3 py-2">
           {filters.projects.map((key) => (
             <span key={key} className="flex items-center gap-1 rounded-full border border-gray-200 py-0.5 pr-1 pl-2 font-mono text-xs">
-              <span className="h-2 w-2 rounded-full" style={{ background: index.projects.find((p) => p.key === key)?.color }} />
+              <ProjectSquare color={index.projects.find((p) => p.key === key)?.color} />
               {key}
               <button
                 onClick={() => setFilters({ projects: filters.projects.filter((k) => k !== key) })}

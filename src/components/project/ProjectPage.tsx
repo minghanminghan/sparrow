@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { PROJECT_COLORS } from '@/core/colors'
 import { isDone } from '@/core/columns'
 import { useKb, useProject } from '@/client/store'
+import { ProjectSquare } from '@/components/ProjectSquare'
 
 const PAGE_SIZE = 20
 const FIELD = 'rounded border border-gray-300 px-2 py-1 text-sm'
@@ -77,8 +78,8 @@ export function ProjectPage({ projectKey }: { projectKey: string }) {
     <div className="mx-auto max-w-3xl space-y-6 p-4">
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: project.color }} />
-          <span className="font-mono text-sm font-medium" style={{ color: project.color }}>
+          <ProjectSquare color={project.color} size="h-3 w-3" />
+          <span className="font-mono text-sm font-medium text-gray-400">
             {project.key}
           </span>
           <NameEditor key={project.name} projectKey={project.key} name={project.name} />
@@ -89,7 +90,7 @@ export function ProjectPage({ projectKey }: { projectKey: string }) {
               key={c}
               onClick={() => void updateProject(project.key, { color: c }).catch(() => {})}
               aria-label={`Color ${c}`}
-              className={`h-6 w-6 rounded-full ${c === project.color ? 'ring-2 ring-gray-900 ring-offset-2' : ''}`}
+              className={`h-6 w-6 rounded ${c === project.color ? 'ring-2 ring-gray-900 ring-offset-2' : ''}`}
               style={{ background: c }}
             />
           ))}
@@ -125,7 +126,8 @@ export function ProjectPage({ projectKey }: { projectKey: string }) {
                 data-opens-task
                 className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-gray-50"
               >
-                <span className="w-20 shrink-0 font-mono text-xs" style={{ color: project.color }}>
+                <span className="flex w-20 shrink-0 items-center gap-1 font-mono text-xs text-gray-400">
+                  <ProjectSquare color={project.color} />
                   {t.id}
                 </span>
                 <span className="min-w-0 flex-1 truncate font-medium text-gray-900">{t.title}</span>

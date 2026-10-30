@@ -3,6 +3,7 @@
 import { useKb } from '@/client/store'
 import type { Filters as FiltersType } from '@/client/store'
 import type { Project } from '@/core'
+import { ProjectSquare } from '@/components/ProjectSquare'
 
 const NO_PROJECTS: Project[] = []
 
@@ -50,7 +51,7 @@ export function Filters() {
           {projects.map((p) => (
             <label key={p.key} className="flex items-center gap-2 rounded px-2 py-1 whitespace-nowrap hover:bg-gray-50">
               <input type="checkbox" checked={filters.projects.includes(p.key)} onChange={(e) => toggleProject(p.key, e.target.checked)} />
-              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: p.color }} />
+              <ProjectSquare color={p.color} />
               <span className="font-mono text-xs">{p.key}</span>
               <span className="text-gray-500">{p.name}</span>
             </label>

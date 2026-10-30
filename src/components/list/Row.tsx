@@ -4,6 +4,7 @@ import { memo } from 'react'
 import type { MouseEvent } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { useKb, useProject } from '@/client/store'
+import { ProjectSquare } from '@/components/ProjectSquare'
 
 type RowProps = {
   id: string
@@ -69,7 +70,8 @@ function RowImpl({ id, depth, dimmed, selected, hasChildren, collapsed, onToggle
       ) : (
         <span className="w-4 shrink-0" />
       )}
-      <span style={{ color }} className="w-20 shrink-0 font-mono text-xs text-gray-400">
+      <span className="flex w-20 shrink-0 items-center gap-1 font-mono text-xs text-gray-400">
+        <ProjectSquare color={color} />
         {task.id}
       </span>
       <button

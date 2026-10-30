@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { isDone } from '@/core/columns'
 import { useKb } from '@/client/store'
+import { ProjectSquare } from '@/components/ProjectSquare'
 
 const FIELD = 'rounded border border-gray-300 px-2 py-1 text-sm'
 
@@ -36,8 +37,8 @@ export function ProjectsList() {
           return (
             <li key={p.key}>
               <Link href={`/p/${p.key}`} className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-gray-50">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.color }} />
-                <span className="w-16 shrink-0 font-mono text-xs" style={{ color: p.color }}>
+                <ProjectSquare color={p.color} />
+                <span className="w-16 shrink-0 font-mono text-xs text-gray-400">
                   {p.key}
                 </span>
                 <span className="flex-1 truncate font-medium text-gray-900">{p.name}</span>

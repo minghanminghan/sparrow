@@ -8,6 +8,7 @@ import { useKb } from '@/client/store'
 import { shrinkImage } from '@/client/image'
 import { visibleColumnTasks } from '@/components/board/visibleTasks'
 import { LINK_TYPES, LinkPicker } from '@/components/detail/TaskDetail'
+import { ProjectSquare } from '@/components/ProjectSquare'
 
 type Photo = { file: File; url: string }
 
@@ -174,12 +175,12 @@ export function QuickCreate() {
           key={p.key}
           type="button"
           onClick={() => setProject(p.key)}
-          style={p.key === project ? { background: p.color, borderColor: p.color } : undefined}
+          aria-pressed={p.key === project}
           className={`flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-xs ${
-            p.key === project ? 'text-white' : 'border-gray-300 text-gray-700'
+            p.key === project ? 'border-gray-900 bg-gray-100 text-gray-900' : 'border-gray-300 text-gray-700'
           }`}
         >
-          {p.key !== project && <span className="h-2 w-2 rounded-full" style={{ background: p.color }} />}
+          <ProjectSquare color={p.color} />
           {p.key}
         </button>
       ))}

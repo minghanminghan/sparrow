@@ -5,6 +5,7 @@ import NextLink from 'next/link'
 import { useSortable } from '@dnd-kit/sortable'
 import type { TaskView } from '@/core'
 import { dueState, useKb, useProject } from '@/client/store'
+import { ProjectSquare } from '@/components/ProjectSquare'
 
 const DUE_STYLE: Record<'overdue' | 'soon', string> = {
   overdue: 'text-red-600',
@@ -28,9 +29,9 @@ function CardContent({ task }: { task: TaskView }) {
           href={`/p/${task.project}`}
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
-          style={{ color }}
-          className="hover:underline"
+          className="inline-flex items-center gap-1 hover:underline"
         >
+          <ProjectSquare color={color} />
           {task.id}
         </NextLink>
       </div>
