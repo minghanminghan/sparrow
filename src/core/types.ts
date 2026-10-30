@@ -5,9 +5,11 @@ export type LinkType = 'blocks' | 'relates'
 export type Link = { type: LinkType; id: string }
 export type Ref = { url: string; label?: string }
 export type Comment = { at: string; author: string; body: string }
+export type Project = { key: string; name: string; color: string }
 export type Attachment = { id: string; filename: string; mime: string; size: number; created: string }
 export type Task = {
   id: string
+  project: string
   title: string
   status: string
   rank: string

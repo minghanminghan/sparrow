@@ -1,5 +1,7 @@
 export * from './types'
 export * from './errors'
+export * from './keys'
+export * from './colors'
 export * from './columns'
 export * from './config'
 export * from './format'
