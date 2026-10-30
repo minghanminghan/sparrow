@@ -159,6 +159,7 @@ export function TaskList() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [newTitle, setNewTitle] = useState('')
+  const project = useKb((s) => s.filters.projects[0])
   const lastClickedRef = useRef<string | null>(null)
 
   const allRows = useMemo(() => decodeRows(rawRows), [rawRows])
@@ -276,7 +277,7 @@ export function TaskList() {
 
   async function submitNewTask(): Promise<void> {
     const title = newTitle.trim()
-    if (!title) return
+    if (!title || !project) return
     setNewTitle('')
     const state = useKb.getState()
     const idx = state.index
@@ -284,7 +285,7 @@ export function TaskList() {
     const roots = idx.tasks.filter((t) => !t.parent)
     const rank = rankBetween(roots[roots.length - 1]?.rank, undefined)
     try {
-      await state.create({ title, rank })
+      await state.create({ title, rank, project })
     } catch {
       // the store already pushed a toast with the error
     }
@@ -353,7 +354,8 @@ export function TaskList() {
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
           onKeyDown={onNewTaskKeyDown}
-          placeholder="+ New task"
+          disabled={!project}
+          placeholder={project ? '+ New task' : '+ New task (filter to a project first)'}
           className="flex-1 rounded border border-gray-200 px-2 py-1 text-sm outline-none focus:border-gray-400"
         />
       </div>
