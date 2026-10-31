@@ -62,7 +62,7 @@ export function ProjectsList() {
             onChange={(e) => setKey(e.target.value)}
             placeholder="Key"
             maxLength={6}
-            className={`w-36 font-mono ${FIELD}`}
+            className={`w-36 font-mono uppercase placeholder:normal-case ${FIELD}`}
           />
           <input
             value={name}
