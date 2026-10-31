@@ -89,6 +89,15 @@ export const MIGRATIONS: (string | ((db: Db) => void))[] = [
       }
     }
   },
+  // The Backlog column is gone. Its tasks move to the ready column.
+  (db) => {
+    const row = db.prepare('SELECT value FROM config WHERE id = 1').get() as { value: string }
+    const config = JSON.parse(row.value) as { columns: { key: string; role?: string }[] }
+    const ready = config.columns.find((c) => c.role === 'ready')!.key
+    config.columns = config.columns.filter((c) => c.key !== 'backlog')
+    db.prepare('UPDATE config SET value = ? WHERE id = 1').run(JSON.stringify(config))
+    db.prepare("UPDATE tasks SET status = ? WHERE status = 'backlog'").run(ready)
+  },
 ]
 
 export function dbPath(): string {
