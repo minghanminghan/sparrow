@@ -4,7 +4,6 @@ import type { Column, Config, Role } from './types'
 export const DEFAULT_CONFIG: Config = {
   user: 'andrew',
   columns: [
-    { key: 'backlog', name: 'Backlog' },
     { key: 'todo', name: 'To do', role: 'ready' },
     { key: 'in-progress', name: 'In progress', role: 'active' },
     { key: 'review', name: 'In review' },
