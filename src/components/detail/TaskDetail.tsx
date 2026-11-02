@@ -321,7 +321,15 @@ const BACKLINK_LABEL: Record<Backlink['type'], string> = {
   'mentioned-in': 'Mentioned in',
 }
 
-export function LinkPicker({ excludeId, onAdd }: { excludeId?: string; onAdd: (link: TaskLink) => void }) {
+export function LinkPicker({
+  excludeId,
+  existing = [],
+  onAdd,
+}: {
+  excludeId?: string
+  existing?: TaskLink[]
+  onAdd: (link: TaskLink) => void
+}) {
   const tasks = useKb((s) => s.index?.tasks ?? [])
   const [type, setType] = useState<LinkType>('blocks')
   const [query, setQuery] = useState('')
@@ -329,10 +337,16 @@ export function LinkPicker({ excludeId, onAdd }: { excludeId?: string; onAdd: (l
   const results = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return []
+    const linked = new Set(existing.filter((l) => l.type === type).map((l) => l.id))
     return tasks
-      .filter((t) => t.id !== excludeId && (t.id.toLowerCase().includes(q) || t.title.toLowerCase().includes(q)))
+      .filter(
+        (t) =>
+          t.id !== excludeId &&
+          !linked.has(t.id) &&
+          (t.id.toLowerCase().includes(q) || t.title.toLowerCase().includes(q)),
+      )
       .slice(0, 8)
-  }, [tasks, query, excludeId])
+  }, [tasks, query, excludeId, existing, type])
 
   function addLink(id: string): void {
     onAdd({ type, id })
@@ -461,7 +475,14 @@ function Links({ task }: { task: TaskView }) {
           </div>
         )
       })}
-      <LinkPicker excludeId={task.id} onAdd={add} />
+      <LinkPicker
+        excludeId={task.id}
+        existing={[
+          ...task.links,
+          ...task.backlinks.flatMap((b) => (b.type === 'relates' ? [{ type: b.type, id: b.id }] : [])),
+        ]}
+        onAdd={add}
+      />
     </div>
   )
 }

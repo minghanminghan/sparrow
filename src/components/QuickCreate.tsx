@@ -268,6 +268,7 @@ export function QuickCreate() {
         ))}
       </ul>
       <LinkPicker
+        existing={links}
         onAdd={(link) => {
           if (!links.some((l) => l.type === link.type && l.id === link.id)) setLinks([...links, link])
         }}
