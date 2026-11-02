@@ -80,7 +80,6 @@ export const COMMANDS: CommandDef[] = [
     flags: [
       { name: 'body', type: 'string', desc: 'comment text, or "-" for stdin' },
       { name: 'body-file', type: 'string', desc: 'path to a file with comment text' },
-      { name: 'author', type: 'string', desc: 'default: SPARROW_AUTHOR, then Tailscale login, then board user' },
     ],
   },
   {
@@ -278,8 +277,7 @@ async function cmdUpdate(id: string, values: Values): Promise<CommandResult> {
 // An empty author lets the server pick: Tailscale-User-Login, then the board user, then "ai".
 async function cmdComment(id: string, values: Values): Promise<CommandResult> {
   const body = requireBody(values, 'comment')
-  const author = (values.author as string | undefined) ?? process.env.SPARROW_AUTHOR ?? process.env.KB_AUTHOR ?? ''
-  return { kind: 'task', value: await postOp(id, { type: 'addComment', author, body }) }
+  return { kind: 'task', value: await postOp(id, { type: 'addComment', author: '', body }) }
 }
 
 function linkTypeAndTarget(values: Values): { type: LinkType; target: string } {

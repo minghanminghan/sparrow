@@ -21,7 +21,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const key = normalizeTaskKey((await params).id)
     const state = getState()
     const { op } = (await req.json()) as { op: Op }
-    // A comment without an author (the CLI default) is from the Tailscale user, else the board user.
+    // A comment without an author (from the CLI) is from the Tailscale user, else the board user.
     if (op?.type === 'addComment' && !op.author) {
       op.author = req.headers.get('Tailscale-User-Login') || state.index.config.user || 'ai'
     }

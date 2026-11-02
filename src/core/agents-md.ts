@@ -36,7 +36,7 @@ If the server's major version differs, commands fail with exit code 5; run
 1. \`sparrow list --project SPAR --status todo\` — find a task. Tasks are listed by rank.
 2. \`sparrow update SPAR-28 --status in-progress\` — take it.
 3. Do the work.
-4. \`sparrow comment SPAR-28 --author ai --body "what you did"\` — leave a note.
+4. \`sparrow comment SPAR-28 --body "what you did"\` — leave a note.
 5. \`sparrow update SPAR-28 --status done\` — mark it done.
 
 Skip tasks that are already in progress, are blocked by an unfinished
@@ -52,8 +52,7 @@ task, or have unfinished subtasks.
   add \`--ref-remove\` to remove it.
 - \`sparrow link <key> --blocks <other>\` or \`--relates <other>\` adds a link;
   add \`--remove\` to remove it.
-- \`sparrow comment\` without \`--author\` uses \`SPARROW_AUTHOR\`, else your
-  Tailscale login, else the board user.
+- \`sparrow comment\` is signed with your Tailscale login, else the board user.
 
 ## Creating tasks
 
