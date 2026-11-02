@@ -1,3 +1,8 @@
+### Sparrow Usage
+
+- `https://sparrow.andrewminghanjiang.com/t/SPAR-1` = `sparrow show SPAR-1`
+- Full reference: `sparrow help --json`. Use `--env dev` for the local `pnpm dev` server; default is prod.
+
 ### Development Guidelines
 
 - Keep code implementation simple
