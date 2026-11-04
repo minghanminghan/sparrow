@@ -24,7 +24,7 @@ test('createProject normalizes, defaults the name, and picks a palette color', (
   expect(PROJECT_COLORS).toContain(p.color)
   expect(code(() => createProject(db, { key: 'NEWS' }))).toBe('conflict')
   expect(code(() => createProject(db, { key: 'TOOLONG' }))).toBe('usage')
-  expect(buildIndex(db).projects.map((x) => x.key)).toEqual(['NEWS', 'SPAR'])
+  expect(buildIndex(db).projects.map((x) => x.key)).toEqual(['NEWS', 'SPAR', 'TASK'])
 })
 
 test('updateProject changes name and color, rejects off-palette colors', () => {

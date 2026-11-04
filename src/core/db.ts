@@ -108,6 +108,7 @@ export const MIGRATIONS: (string | ((db: Db) => void))[] = [
     db.prepare('UPDATE config SET value = ? WHERE id = 1').run(JSON.stringify(config))
     db.prepare("UPDATE tasks SET status = ? WHERE status = 'review'").run(active)
   },
+  `INSERT OR IGNORE INTO projects (key, name, color, next_number) VALUES ('TASK', 'No project', '#475569', 1);`,
 ]
 
 export function dbPath(): string {

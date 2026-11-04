@@ -137,8 +137,8 @@ test('projects count separately and keys are case-insensitive', () => {
   expect(code(() => readTask(db, '1'))).toBe('usage')
 })
 
-test('create needs a project or a parent', () => {
-  expect(() => createTask(db, { title: 'x' })).toThrow('a project is required (one of: SPAR)')
+test('create without a project or parent goes to the inbox', () => {
+  expect(createTask(db, { title: 'x' }).id).toBe('TASK-1')
   expect(code(() => createTask(db, { title: 'x', project: 'NOPE' }))).toBe('not_found')
   const p = createTask(db, { title: 'p', project: 'SPAR' })
   expect(createTask(db, { title: 'c', parent: p.id.toLowerCase() }).project).toBe('SPAR')

@@ -4,7 +4,7 @@ import { tx } from './db'
 import type { Db } from './db'
 import { KbError } from './errors'
 import { hash } from './format'
-import { normalizeProjectKey, normalizeTaskKey, splitTaskKey } from './keys'
+import { INBOX, normalizeProjectKey, normalizeTaskKey, splitTaskKey } from './keys'
 import { loadTasks, rowIdOf, saveTask } from './store'
 import type { Config, Link, Ref, Task } from './types'
 
@@ -178,10 +178,7 @@ export function createTask(db: Db, input: CreateInput): Task {
       if (project) checkSameProject(project, parent)
       project = parent.project
     }
-    if (!project) {
-      const keys = (db.prepare('SELECT key FROM projects ORDER BY key').all() as { key: string }[]).map((r) => r.key)
-      throw new KbError('usage', `a project is required (one of: ${keys.join(', ')})`)
-    }
+    project ??= INBOX
     const next = db.prepare('UPDATE projects SET next_number = next_number + 1 WHERE key = ? RETURNING next_number - 1 AS n').get(project) as
       | { n: number }
       | undefined

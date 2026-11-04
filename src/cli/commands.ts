@@ -45,7 +45,7 @@ export const COMMANDS: CommandDef[] = [
     summary: 'Create a new task',
     flags: [
       { name: 'title', type: 'string', desc: 'task title (required)' },
-      { name: 'project', type: 'string', desc: 'project key (required unless --parent is given)' },
+      { name: 'project', type: 'string', desc: 'project key (default: the parent\'s, else no project)' },
       { name: 'parent', type: 'string', desc: 'parent task key' },
       { name: 'status', type: 'string', desc: 'status (default: ready column)' },
       { name: 'due', type: 'string', desc: 'due date YYYY-MM-DD' },

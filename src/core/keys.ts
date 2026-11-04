@@ -1,5 +1,8 @@
 import { KbError } from './errors'
 
+// Tasks created without a project go here. Its name shows as the project in the UI.
+export const INBOX = 'TASK'
+
 const PROJECT_RE = /^[A-Z][A-Z0-9]{0,5}$/
 const TASK_RE = /^[A-Z][A-Z0-9]{0,5}-[1-9]\d*$/
 
