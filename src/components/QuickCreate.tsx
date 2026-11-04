@@ -17,6 +17,9 @@ const FIELD = 'rounded border border-gray-300 px-2 py-1 text-sm'
 // Below Tailwind's `md` breakpoint the form is a full-screen page with its own layout.
 const PHONE_QUERY = '(width < 48rem)'
 
+const ONE_SHOT_NOTE =
+  'note to agent: you are responsible for creating code, merging the PR, monitoring the deployment, syncing local CLIs, and updating the task'
+
 function subscribePhone(onChange: () => void): () => void {
   const mq = window.matchMedia(PHONE_QUERY)
   mq.addEventListener('change', onChange)
@@ -27,6 +30,7 @@ export function QuickCreate() {
   const createFor = useKb((s) => s.createFor)
   const openCreate = useKb((s) => s.openCreate)
   const create = useKb((s) => s.create)
+  const op = useKb((s) => s.op)
   const columns = useKb((s) => s.index?.config.columns)
   const projects = useKb((s) => s.index?.projects)
   const byId = useKb((s) => s.byId)
@@ -43,6 +47,7 @@ export function QuickCreate() {
   const [refs, setRefs] = useState<Ref[]>([])
   const [url, setUrl] = useState('')
   const [photos, setPhotos] = useState<Photo[]>([])
+  const [oneShot, setOneShot] = useState(false)
   const photosRef = useRef<Photo[]>([])
   const pending = useRef<Promise<unknown>>(Promise.resolve())
   const generation = useRef(0)
@@ -71,6 +76,7 @@ export function QuickCreate() {
     setLinks([])
     setRefs([])
     setUrl('')
+    setOneShot(false)
     generation.current++
     for (const p of photosRef.current) URL.revokeObjectURL(p.url)
     updatePhotos([])
@@ -100,7 +106,7 @@ export function QuickCreate() {
         ? visibleColumnTasks(state.index, state.filters, status)[0]
         : undefined
     try {
-      await create({
+      const task = await create({
         title: t,
         project,
         status: status || undefined,
@@ -111,6 +117,7 @@ export function QuickCreate() {
         links,
         refs,
       }, photosRef.current.map((p) => p.file))
+      if (task && oneShot) void op(task.id, { type: 'addComment', author: state.index?.config.user ?? '', body: ONE_SHOT_NOTE })
       close()
     } catch {
       // the store already pushed a toast with the error
@@ -249,6 +256,13 @@ export function QuickCreate() {
     />
   )
 
+  const oneShotBox = (
+    <label className="flex items-center gap-1 text-xs text-gray-600">
+      <input type="checkbox" checked={oneShot} onChange={(e) => setOneShot(e.target.checked)} />
+      One-shot
+    </label>
+  )
+
   const linksSection = (
     <section>
       <h2 className="mb-2 text-sm font-semibold text-gray-700">Links</h2>
@@ -316,13 +330,16 @@ export function QuickCreate() {
             Cancel
           </button>
           <span className="text-sm font-medium">New task</span>
-          <button
-            onClick={() => void submit()}
-            disabled={!project}
-            className="rounded bg-gray-900 px-3 py-1 text-sm text-white disabled:opacity-40"
-          >
-            Create
-          </button>
+          <div className="flex items-center gap-3">
+            {oneShotBox}
+            <button
+              onClick={() => void submit()}
+              disabled={!project}
+              className="rounded bg-gray-900 px-3 py-1 text-sm text-white disabled:opacity-40"
+            >
+              Create
+            </button>
+          </div>
         </div>
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
           {titleInput}
@@ -371,7 +388,7 @@ export function QuickCreate() {
         {refsSection}
 
         <div className="flex items-center justify-end gap-3">
-          <span className="text-xs text-gray-400">⌘Enter to create</span>
+          {oneShotBox}
           <button
             onClick={() => void submit()}
             disabled={!project}
