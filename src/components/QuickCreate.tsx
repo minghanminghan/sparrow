@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { Link, Ref } from '@/core'
+import { INBOX } from '@/core/keys'
 import { rankBetween } from '@/core/rank'
 import { useKb } from '@/client/store'
 import { shrinkImage } from '@/client/image'
@@ -34,7 +35,6 @@ export function QuickCreate() {
   const submitting = useRef(false)
   const [title, setTitle] = useState('')
   const [project, setProject] = useState('')
-  const startProject = useRef('')
   const [status, setStatus] = useState('')
   const [parent, setParent] = useState('')
   const [due, setDue] = useState('')
@@ -52,8 +52,8 @@ export function QuickCreate() {
   useEffect(() => {
     if (!createFor) return
     setStatus(createFor.status ?? '')
-    startProject.current = useKb.getState().filters.projects[0] ?? ''
-    setProject(startProject.current)
+    const start = useKb.getState().filters.projects[0] ?? ''
+    setProject(start === INBOX ? '' : start)
     titleRef.current?.focus()
   }, [createFor])
 
@@ -83,16 +83,9 @@ export function QuickCreate() {
     openCreate(null)
   }
 
-  function onClose(): void {
-    const dirty =
-      title || parent || due || body || url || links.length || refs.length || photos.length || project !== startProject.current
-    if (dirty && !window.confirm('Discard this task?')) return
-    close()
-  }
-
   async function submit(): Promise<void> {
     const t = title.trim()
-    if (!t || !project || submitting.current) return
+    if (!t || submitting.current) return
     submitting.current = true
     await pending.current
     // Opened from a column: put the new task at the top of it, like the old inline input did.
@@ -104,7 +97,7 @@ export function QuickCreate() {
     try {
       await create({
         title: t,
-        project,
+        project: project || undefined,
         status: status || undefined,
         rank: first ? rankBetween(undefined, first.rank) : undefined,
         parent: parent.trim() || undefined,
@@ -147,7 +140,7 @@ export function QuickCreate() {
   function onKeyDown(e: KeyboardEvent): void {
     if (e.key === 'Escape') {
       e.stopPropagation()
-      onClose()
+      close()
     } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault()
       void submit()
@@ -173,7 +166,7 @@ export function QuickCreate() {
 
   const projectPicker = (
     <div className="flex flex-wrap gap-2">
-      {projects?.map((p) => (
+      {[{ key: '', color: undefined }, ...(projects?.filter((p) => p.key !== INBOX) ?? [])].map((p) => (
         <button
           key={p.key}
           type="button"
@@ -183,8 +176,8 @@ export function QuickCreate() {
             p.key === project ? 'border-gray-900 bg-gray-100 text-gray-900' : 'border-gray-300 text-gray-700'
           }`}
         >
-          <ProjectSquare color={p.color} />
-          {p.key}
+          {p.color && <ProjectSquare color={p.color} />}
+          {p.key || 'None'}
         </button>
       ))}
     </div>
@@ -322,7 +315,7 @@ export function QuickCreate() {
     return (
       <div className="fixed inset-0 z-40 flex flex-col bg-white" onKeyDown={onKeyDown}>
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2">
-          <button onClick={onClose} className="text-sm text-gray-500">
+          <button onClick={close} className="text-sm text-gray-500">
             Cancel
           </button>
           <span className="text-sm font-medium">New task</span>
@@ -330,8 +323,7 @@ export function QuickCreate() {
             {oneShotBox}
             <button
               onClick={() => void submit()}
-              disabled={!project}
-              className="rounded bg-gray-900 px-3 py-1 text-sm text-white disabled:opacity-40"
+              className="rounded bg-gray-900 px-3 py-1 text-sm text-white"
             >
               Create
             </button>
@@ -358,7 +350,7 @@ export function QuickCreate() {
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/20 pt-24" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/20 pt-24" onClick={close}>
       <div
         className="max-h-[80vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -387,8 +379,7 @@ export function QuickCreate() {
           {oneShotBox}
           <button
             onClick={() => void submit()}
-            disabled={!project}
-            className="rounded bg-gray-900 px-3 py-1 text-sm text-white hover:bg-gray-700 disabled:opacity-40"
+            className="rounded bg-gray-900 px-3 py-1 text-sm text-white hover:bg-gray-700"
           >
             Create
           </button>
