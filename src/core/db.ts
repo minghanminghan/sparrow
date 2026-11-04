@@ -99,6 +99,15 @@ export const MIGRATIONS: (string | ((db: Db) => void))[] = [
     db.prepare("UPDATE tasks SET status = ? WHERE status = 'backlog'").run(ready)
   },
   `ALTER TABLE tasks ADD COLUMN one_shot INTEGER NOT NULL DEFAULT 0;`,
+  // The In review column is gone. Its tasks move to the active column.
+  (db) => {
+    const row = db.prepare('SELECT value FROM config WHERE id = 1').get() as { value: string }
+    const config = JSON.parse(row.value) as { columns: { key: string; role?: string }[] }
+    const active = config.columns.find((c) => c.role === 'active')!.key
+    config.columns = config.columns.filter((c) => c.key !== 'review')
+    db.prepare('UPDATE config SET value = ? WHERE id = 1').run(JSON.stringify(config))
+    db.prepare("UPDATE tasks SET status = ? WHERE status = 'review'").run(active)
+  },
 ]
 
 export function dbPath(): string {
