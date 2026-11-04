@@ -16,6 +16,7 @@ export type Task = {
   parent?: string
   due?: string
   completed?: string
+  oneShot: boolean
   links: Link[]
   refs: Ref[]
   created: string

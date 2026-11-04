@@ -2,6 +2,7 @@ import { parseArgs } from 'node:util'
 import { EXIT, KbError } from '../core/errors'
 import type { TaskView } from '../core/indexer'
 import { formatSize } from '../core/mime'
+import { ONE_SHOT_NOTE } from '../core/ops'
 import { COMMANDS, GLOBAL_FLAGS, runCommand } from './commands'
 import { setEnv } from './config'
 import type { CommandResult, FlagDef, HelpValue, Values } from './commands'
@@ -39,6 +40,7 @@ function printDetail(t: TaskView): void {
     ['Title', t.title],
     ['Status', t.status],
     ['Due', t.due],
+    ['One-shot', t.oneShot ? `yes: ${ONE_SHOT_NOTE}` : undefined],
     ['Parent', t.parent],
     ['Children', t.children.length ? `${t.children.join(', ')} (${t.progress.done}/${t.progress.total} done)` : undefined],
     ['Links', t.links.map((l) => `${l.type} ${l.id}`).join(', ') || undefined],
@@ -131,7 +133,7 @@ async function main(): Promise<void> {
   let values: Values
   let positionals: string[]
   try {
-    ;({ values, positionals } = parseArgs({ args: process.argv.slice(2), options: buildOptions(allFlags), allowPositionals: true }) as {
+    ;({ values, positionals } = parseArgs({ args: process.argv.slice(2), options: buildOptions(allFlags), allowPositionals: true, allowNegative: true }) as {
       values: Values
       positionals: string[]
     })

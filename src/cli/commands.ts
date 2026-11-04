@@ -51,6 +51,7 @@ export const COMMANDS: CommandDef[] = [
       { name: 'due', type: 'string', desc: 'due date YYYY-MM-DD' },
       { name: 'body', type: 'string', desc: 'body text, or "-" for stdin' },
       { name: 'body-file', type: 'string', desc: 'path to a file with body text' },
+      { name: 'one-shot', type: 'boolean', desc: 'mark the task one-shot (the agent ships it end to end)' },
     ],
   },
   {
@@ -66,6 +67,7 @@ export const COMMANDS: CommandDef[] = [
       { name: 'status', type: 'string', desc: 'new status' },
       { name: 'due', type: 'string', desc: 'YYYY-MM-DD, or "none" to clear' },
       { name: 'parent', type: 'string', desc: 'new parent task key' },
+      { name: 'one-shot', type: 'boolean', desc: 'mark the task one-shot; --no-one-shot to clear' },
       { name: 'before', type: 'string', desc: 'rank just before this task key, same status' },
       { name: 'after', type: 'string', desc: 'rank just after this task key, same status' },
       { name: 'ref', type: 'string', desc: 'add an external reference URL' },
@@ -230,6 +232,7 @@ async function cmdCreate(values: Values): Promise<CommandResult> {
     status: values.status as string | undefined,
     due: values.due as string | undefined,
     body: readBodyInput(values),
+    oneShot: values['one-shot'] as boolean | undefined,
   }
   return { kind: 'task', value: await sendJson<TaskView>('/api/tasks', 'POST', input) }
 }
@@ -262,6 +265,7 @@ async function cmdUpdate(id: string, values: Values): Promise<CommandResult> {
   if (values.status !== undefined) await apply({ type: 'setStatus', status: values.status as string })
   if (values.due !== undefined) await apply({ type: 'setDue', due: values.due === 'none' ? null : (values.due as string) })
   if (values.parent !== undefined) await apply({ type: 'setParent', parent: values.parent as string })
+  if (values['one-shot'] !== undefined) await apply({ type: 'setOneShot', oneShot: values['one-shot'] as boolean })
   if (values.before !== undefined || values.after !== undefined) {
     const rank = await neighborRank(task.status, id, values.before as string | undefined, values.after as string | undefined)
     await apply({ type: 'setRank', rank })

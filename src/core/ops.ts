@@ -13,6 +13,7 @@ export type Op =
   | { type: 'setRank'; rank: string }
   | { type: 'setDue'; due: string | null }
   | { type: 'setParent'; parent: string | null }
+  | { type: 'setOneShot'; oneShot: boolean }
   | { type: 'setTitle'; title: string; baseHash?: string }
   | { type: 'setBody'; body: string; baseHash?: string }
   | { type: 'addLink'; link: Link }
@@ -32,8 +33,13 @@ export type CreateInput = {
   rank?: string
   links?: Link[]
   refs?: Ref[]
+  oneShot?: boolean
   clientId?: string
 }
+
+// What a one-shot task asks of the agent that picks it up.
+export const ONE_SHOT_NOTE =
+  'you are responsible for creating code, merging the PR, monitoring the deployment, syncing local CLIs, and updating the task'
 
 export const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 
@@ -106,6 +112,9 @@ function apply(db: Db, config: Config, task: Task, op: Op, at: string): void {
       task.parent = parent
       return
     }
+    case 'setOneShot':
+      task.oneShot = op.oneShot
+      return
     case 'setTitle':
       checkHash('title', task.title, op.baseHash)
       task.title = op.title
@@ -187,6 +196,7 @@ export function createTask(db: Db, input: CreateInput): Task {
       rank: '',
       parent: parent?.id,
       due: input.due,
+      oneShot: input.oneShot ?? false,
       links: (input.links ?? []).map(normalizeLink),
       refs: input.refs ?? [],
       created: at,
