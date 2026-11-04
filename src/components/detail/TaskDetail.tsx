@@ -754,6 +754,17 @@ export function TaskDetail({ id, fullPage = false }: { id: string; fullPage?: bo
             }}
             className="rounded border border-gray-300 px-2 py-1 text-sm"
           />
+          <label className="flex items-center gap-1 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={task.oneShot}
+              onChange={(e) => {
+                const oneShot = e.target.checked
+                void op(task.id, { type: 'setOneShot', oneShot }, (t) => ({ ...t, oneShot }))
+              }}
+            />
+            One-shot
+          </label>
         </div>
       </div>
 

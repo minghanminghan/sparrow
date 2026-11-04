@@ -98,6 +98,7 @@ export const MIGRATIONS: (string | ((db: Db) => void))[] = [
     db.prepare('UPDATE config SET value = ? WHERE id = 1').run(JSON.stringify(config))
     db.prepare("UPDATE tasks SET status = ? WHERE status = 'backlog'").run(ready)
   },
+  `ALTER TABLE tasks ADD COLUMN one_shot INTEGER NOT NULL DEFAULT 0;`,
 ]
 
 export function dbPath(): string {

@@ -59,6 +59,13 @@ task, or have unfinished subtasks.
 \`sparrow create --project <KEY> --title "..."\` creates a task. \`--project\` is
 required unless \`--parent\` is given.
 
+## One-shot tasks
+
+A task with \`oneShot: true\` is yours end to end: you are responsible for
+creating code, merging the PR, monitoring the deployment, syncing local CLIs,
+and updating the task. Mark one with \`sparrow create --one-shot\` or
+\`sparrow update <key> --one-shot\`; clear it with \`--no-one-shot\`.
+
 ## Breaking work into subtasks
 
 Use \`sparrow create --title "..." --parent <key>\` to add a subtask under a task.

@@ -18,6 +18,7 @@ const view = (p: Partial<TaskView>): TaskView => ({
   updated: '',
   body: '',
   comments: [],
+  oneShot: false,
   extra: {},
   titleHash: '',
   bodyHash: '',

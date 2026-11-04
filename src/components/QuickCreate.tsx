@@ -17,9 +17,6 @@ const FIELD = 'rounded border border-gray-300 px-2 py-1 text-sm'
 // Below Tailwind's `md` breakpoint the form is a full-screen page with its own layout.
 const PHONE_QUERY = '(width < 48rem)'
 
-const ONE_SHOT_NOTE =
-  'note to agent: you are responsible for creating code, merging the PR, monitoring the deployment, syncing local CLIs, and updating the task'
-
 function subscribePhone(onChange: () => void): () => void {
   const mq = window.matchMedia(PHONE_QUERY)
   mq.addEventListener('change', onChange)
@@ -30,7 +27,6 @@ export function QuickCreate() {
   const createFor = useKb((s) => s.createFor)
   const openCreate = useKb((s) => s.openCreate)
   const create = useKb((s) => s.create)
-  const op = useKb((s) => s.op)
   const columns = useKb((s) => s.index?.config.columns)
   const projects = useKb((s) => s.index?.projects)
   const byId = useKb((s) => s.byId)
@@ -106,7 +102,7 @@ export function QuickCreate() {
         ? visibleColumnTasks(state.index, state.filters, status)[0]
         : undefined
     try {
-      const task = await create({
+      await create({
         title: t,
         project,
         status: status || undefined,
@@ -116,8 +112,8 @@ export function QuickCreate() {
         body: body.trim() || undefined,
         links,
         refs,
+        oneShot,
       }, photosRef.current.map((p) => p.file))
-      if (task && oneShot) void op(task.id, { type: 'addComment', author: state.index?.config.user ?? '', body: ONE_SHOT_NOTE })
       close()
     } catch {
       // the store already pushed a toast with the error
