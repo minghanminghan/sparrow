@@ -6,7 +6,6 @@ export const DEFAULT_CONFIG: Config = {
   columns: [
     { key: 'todo', name: 'To do', role: 'ready' },
     { key: 'in-progress', name: 'In progress', role: 'active' },
-    { key: 'review', name: 'In review' },
     { key: 'done', name: 'Done', role: 'done' },
   ],
 }
