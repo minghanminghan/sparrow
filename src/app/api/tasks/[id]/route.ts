@@ -25,9 +25,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (op?.type === 'addComment' && !op.author) {
       op.author = req.headers.get('Tailscale-User-Login') || state.index.config.user || 'ai'
     }
-    applyOp(state.db, key, op)
+    const task = applyOp(state.db, key, op)
     refresh(state)
-    const view = viewTask(state.index, key)
+    const view = viewTask(state.index, task.id)
     if (!view) throw new KbError('not_found', `task ${key} not found`)
     return Response.json(view)
   } catch (err) {

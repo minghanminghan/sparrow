@@ -286,7 +286,16 @@ export const useKb = create<KbStore>()((set, get) => {
       // snap-back flicker on e.g. a cross-column drag's two sequential ops).
       if (isLast) {
         const base = confirmed[id]
-        if (base) {
+        if (base && base.id !== id) {
+          // A project move gave the task a new key.
+          const { byId, index, panelId } = get()
+          const { [id]: _, ...rest } = byId
+          set({
+            byId: { ...rest, [base.id]: base },
+            index: index ? { ...replaceTask(removeFromIndex(index, id), base), moved: { ...index.moved, [id]: base.id } } : index,
+            panelId: panelId === id ? base.id : panelId,
+          })
+        } else if (base) {
           const index = get().index
           set({ byId: { ...get().byId, [id]: base }, index: index ? replaceTask(index, base) : index })
         }

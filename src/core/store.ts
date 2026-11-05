@@ -25,11 +25,21 @@ function keysById(db: Db): Map<string, string> {
   return new Map(rows.map((r) => [String(r.id), `${r.project}-${r.number}`]))
 }
 
+// Accepts a task's current key or one it had before moving project.
 export function rowIdOf(db: Db, key: string): number {
   const { project, number } = splitTaskKey(key)
-  const row = db.prepare('SELECT id FROM tasks WHERE project = ? AND number = ?').get(project, number) as { id: number } | undefined
+  const row = (db.prepare('SELECT id FROM tasks WHERE project = ? AND number = ?').get(project, number) ??
+    db.prepare('SELECT task_id AS id FROM task_aliases WHERE project = ? AND number = ?').get(project, number)) as { id: number } | undefined
   if (!row) throw new KbError('not_found', `task ${key} not found`)
   return row.id
+}
+
+// Old key -> current key for every task that moved project.
+export function loadAliases(db: Db): Record<string, string> {
+  const rows = db
+    .prepare("SELECT a.project || '-' || a.number AS old, t.project || '-' || t.number AS key FROM task_aliases a JOIN tasks t ON t.id = a.task_id")
+    .all() as { old: string; key: string }[]
+  return Object.fromEntries(rows.map((r) => [r.old, r.key]))
 }
 
 // Loads live (not soft-deleted) tasks, or just one when key is given.

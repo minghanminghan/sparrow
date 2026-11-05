@@ -62,7 +62,9 @@ export function refresh(state: State): void {
   }
 
   const configChanged =
-    JSON.stringify(next.config) !== JSON.stringify(state.index.config) || JSON.stringify(next.projects) !== JSON.stringify(state.index.projects)
+    JSON.stringify(next.config) !== JSON.stringify(state.index.config) ||
+    JSON.stringify(next.projects) !== JSON.stringify(state.index.projects) ||
+    JSON.stringify(next.moved) !== JSON.stringify(state.index.moved)
   state.index = next
   const rev = revOf(next)
   if (rev !== state.rev) {

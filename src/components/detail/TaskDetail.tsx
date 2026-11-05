@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { KeyboardEvent, MouseEvent } from 'react'
 import NextLink from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -708,15 +708,22 @@ function Comments({ task }: { task: TaskView }) {
   )
 }
 
-export function TaskDetail({ id, fullPage = false }: { id: string; fullPage?: boolean }) {
+export function TaskDetail({ id: requested, fullPage = false }: { id: string; fullPage?: boolean }) {
+  // A key from before a project move resolves to the task's current key.
+  const id = useKb((s) => s.index?.moved?.[requested] ?? requested)
   const task = useKb((s) => s.byId[id])
   const config = useKb((s) => s.index?.config)
+  const projects = useKb((s) => s.index?.projects)
   const op = useKb((s) => s.op)
   const openPanel = useKb((s) => s.openPanel)
   const remove = useKb((s) => s.remove)
   const router = useRouter()
   const [copied, setCopied] = useState(false)
   const project = useProject(task?.project)
+
+  useEffect(() => {
+    if (fullPage && id !== requested) router.replace(`/t/${id}`)
+  }, [fullPage, id, requested, router])
 
   if (!task || !config) {
     return <div className="p-4 text-sm text-gray-500">Loading…</div>
@@ -771,6 +778,18 @@ export function TaskDetail({ id, fullPage = false }: { id: string; fullPage?: bo
             {config.columns.map((c) => (
               <option key={c.key} value={c.key}>
                 {c.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={task.project}
+            title="Move to project. The task and its subtasks get new keys."
+            onChange={(e) => void op(task.id, { type: 'setProject', project: e.target.value })}
+            className="rounded border border-gray-300 px-2 py-1 text-sm"
+          >
+            {projects?.map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.name}
               </option>
             ))}
           </select>
