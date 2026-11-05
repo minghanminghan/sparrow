@@ -23,7 +23,7 @@ function CardContent({ task }: { task: TaskView }) {
 
   return (
     <>
-      <div className="font-mono text-xs text-gray-400">
+      <div className="flex items-center justify-between font-mono text-xs text-gray-400">
         {/* Stops the click and the pointerdown so the key opens the project, not the panel or a drag. */}
         <NextLink
           href={`/p/${task.project}`}
@@ -34,6 +34,11 @@ function CardContent({ task }: { task: TaskView }) {
           <ProjectSquare color={color} />
           {task.id}
         </NextLink>
+        {task.oneShot && (
+          <span title="One-shot" className="text-lg leading-none">
+            🤖
+          </span>
+        )}
       </div>
       <div className="mt-1 font-medium text-gray-900">{task.title}</div>
       {parentTitle && <div className="mt-1 truncate text-xs text-gray-500">↳ {parentTitle}</div>}
@@ -45,8 +50,7 @@ function CardContent({ task }: { task: TaskView }) {
           </span>
         )}
         {task.links.length > 0 && <span>🔗 {task.links.length}</span>}
-        {task.refs.length > 0 && <span>📎 {task.refs.length}</span>}
-      </div>
+        {task.refs.length > 0 && <span>📎 {task.refs.length}</span>}      </div>
     </>
   )
 }

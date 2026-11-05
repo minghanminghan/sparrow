@@ -7,12 +7,14 @@ import { currentEnv, serverUrl } from './config'
 let warned = false
 
 // fetch for CLI → server calls: sends the version header and handles a server version mismatch.
+// A local dev server always reports package.json's unreleased version, so --env dev skips the check.
 export async function request(url: string | URL, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers)
-  headers.set(VERSION_HEADER, VERSION)
-  if (currentEnv() === 'dev') headers.set(ENV_HEADER, 'dev')
+  const dev = currentEnv() === 'dev'
+  if (dev) headers.set(ENV_HEADER, 'dev')
+  else headers.set(VERSION_HEADER, VERSION)
   const res = await fetch(url, { ...init, headers })
-  checkServerVersion(res.headers.get(VERSION_HEADER) ?? (res.status === 426 ? 'unknown' : null))
+  if (!dev) checkServerVersion(res.headers.get(VERSION_HEADER) ?? (res.status === 426 ? 'unknown' : null))
   return res
 }
 

@@ -40,7 +40,7 @@ function printDetail(t: TaskView): void {
     ['Title', t.title],
     ['Status', t.status],
     ['Due', t.due],
-    ['One-shot', t.oneShot ? `yes: ${ONE_SHOT_NOTE}` : undefined],
+    ['Note', t.oneShot ? ONE_SHOT_NOTE : undefined],
     ['Parent', t.parent],
     ['Children', t.children.length ? `${t.children.join(', ')} (${t.progress.done}/${t.progress.total} done)` : undefined],
     ['Links', t.links.map((l) => `${l.type} ${l.id}`).join(', ') || undefined],
@@ -91,7 +91,8 @@ function printHelp(value: HelpValue): void {
 
 function printResult(result: CommandResult, jsonMode: boolean): void {
   if (jsonMode) {
-    console.log(JSON.stringify(result.value))
+    const oneShot = (result.kind === 'task' || result.kind === 'detail') && result.value.oneShot
+    console.log(JSON.stringify(oneShot ? { ...result.value, note: ONE_SHOT_NOTE } : result.value))
     return
   }
   switch (result.kind) {
