@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { beforeEach, expect, test } from 'vitest'
+import { beforeEach, expect, test, vi } from 'vitest'
 import { addAttachment, removeAttachment } from './attachments'
 import { connect, MIGRATIONS, migrate, openDb } from './db'
 import { MAX_ATTACHMENT_BYTES } from './mime'
@@ -68,6 +68,18 @@ test('done sets and clears completed', () => {
   const t = createTask(db, { project: 'SPAR', title: 'a' })
   expect(applyOp(db, t.id, { type: 'setStatus', status: 'done' }).completed).toBeTruthy()
   expect(applyOp(db, t.id, { type: 'setStatus', status: 'todo' }).completed).toBeUndefined()
+})
+
+test('started is the last move into in progress, or created when done skips it', () => {
+  vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z'), toFake: ['Date'] })
+  const t = createTask(db, { project: 'SPAR', title: 'a' })
+  expect(t.started).toBeUndefined()
+  expect(applyOp(db, t.id, { type: 'setStatus', status: 'done' }).started).toBe(t.created)
+  vi.setSystemTime(new Date('2026-01-02T00:00:00Z'))
+  applyOp(db, t.id, { type: 'setStatus', status: 'in-progress' })
+  vi.setSystemTime(new Date('2026-01-03T00:00:00Z'))
+  expect(applyOp(db, t.id, { type: 'setStatus', status: 'in-progress', rank: 'a5' }).started).toBe('2026-01-02T00:00:00Z')
+  vi.useRealTimers()
 })
 
 test('attachments: uuid file on disk, listed in index, remove keeps the file', () => {

@@ -116,6 +116,11 @@ export const MIGRATIONS: (string | ((db: Db) => void))[] = [
     task_id INTEGER NOT NULL REFERENCES tasks(id),
     PRIMARY KEY (project, number)
   );`,
+  // When a task last went into the active column. Existing tasks start at their created time.
+  `
+  ALTER TABLE tasks ADD COLUMN started TEXT;
+  UPDATE tasks SET started = created;
+  `,
 ]
 
 export function dbPath(): string {

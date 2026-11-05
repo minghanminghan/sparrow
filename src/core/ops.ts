@@ -1,5 +1,5 @@
 import { generateKeyBetween } from 'fractional-indexing'
-import { columnByRole, isDone, loadConfig } from './config'
+import { columnByRole, isActive, isDone, loadConfig } from './config'
 import { tx } from './db'
 import type { Db } from './db'
 import { KbError } from './errors'
@@ -53,7 +53,9 @@ export function readTask(db: Db, id: string): Task {
 
 function setStatus(config: Config, task: Task, status: string, at: string): void {
   if (!config.columns.some((c) => c.key === status)) throw new KbError('usage', `unknown status "${status}"`)
+  if (status !== task.status && isActive(config, status)) task.started = at
   task.status = status
+  if (isDone(config, status)) task.started ??= task.created
   task.completed = isDone(config, status) ? (task.completed ?? at) : undefined
 }
 
@@ -216,6 +218,7 @@ export function createTask(db: Db, input: CreateInput): Task {
       rank: '',
       parent: parent?.id,
       due: input.due,
+      started: isActive(config, status) ? at : undefined,
       oneShot: input.oneShot ?? false,
       links: (input.links ?? []).map(normalizeLink),
       refs: input.refs ?? [],

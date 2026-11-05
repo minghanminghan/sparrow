@@ -69,6 +69,7 @@ export function loadTasks(db: Db, key?: string): Task[] {
       rank: String(r.rank),
       parent: keyOf(r.parent),
       due: str(r.due),
+      started: str(r.started),
       completed: str(r.completed),
       oneShot: r.one_shot === 1,
       links: links.get(tid) ?? [],
@@ -87,11 +88,11 @@ export function saveTask(db: Db, task: Task): string {
   const { project, number } = splitTaskKey(task.id)
   const row = db
     .prepare(
-      `INSERT INTO tasks (project, number, title, status, rank, parent, due, body, extra, created, updated, completed, one_shot)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO tasks (project, number, title, status, rank, parent, due, body, extra, created, updated, started, completed, one_shot)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (project, number) DO UPDATE SET title = excluded.title, status = excluded.status, rank = excluded.rank,
          parent = excluded.parent, due = excluded.due, body = excluded.body,
-         extra = excluded.extra, updated = excluded.updated, completed = excluded.completed,
+         extra = excluded.extra, updated = excluded.updated, started = excluded.started, completed = excluded.completed,
          one_shot = excluded.one_shot
        RETURNING id`,
     )
@@ -107,6 +108,7 @@ export function saveTask(db: Db, task: Task): string {
       JSON.stringify(task.extra),
       task.created,
       task.updated,
+      task.started ?? null,
       task.completed ?? null,
       task.oneShot ? 1 : 0,
     ) as Row
