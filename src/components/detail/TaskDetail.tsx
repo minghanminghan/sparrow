@@ -34,9 +34,38 @@ function groupBy<T, K extends string>(items: T[], keyFn: (t: T) => K): Partial<R
 // Clicks on a rendered link should follow it, not start editing.
 const isLinkClick = (e: MouseEvent) => e.target instanceof Element && e.target.closest('a') !== null
 
+// Replaces [from, to) through execCommand so native undo keeps working.
+function replaceText(el: HTMLTextAreaElement, from: number, to: number, text: string): void {
+  el.setSelectionRange(from, to)
+  if (document.execCommand('insertText', false, text)) return
+  el.setRangeText(text, from, to, 'end')
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+// Tab inserts a tab; with a multi-line selection, Tab and Shift+Tab indent and outdent each line.
+function indent(el: HTMLTextAreaElement, outdent: boolean): void {
+  const { value, selectionStart: s, selectionEnd: e } = el
+  if (!outdent && !value.slice(s, e).includes('\n')) return replaceText(el, s, e, '\t')
+  const start = value.lastIndexOf('\n', s - 1) + 1
+  const old = value.slice(start, e)
+  const next = old
+    .split('\n')
+    .map((l) => (outdent ? l.replace(/^(\t| {1,4})/, '') : '\t' + l))
+    .join('\n')
+  if (next === old) return
+  replaceText(el, start, e, next)
+  const caret = Math.max(start, s + next.length - old.length)
+  if (s === e) el.setSelectionRange(caret, caret)
+  else el.setSelectionRange(start, start + next.length)
+}
+
 function onEditorKeyDown(e: KeyboardEvent<HTMLTextAreaElement>, cancel: () => void): void {
   if (e.key === 'Escape') cancel()
   else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') e.currentTarget.blur()
+  else if (e.key === 'Tab' && !e.altKey && !e.metaKey && !e.ctrlKey) {
+    e.preventDefault()
+    indent(e.currentTarget, e.shiftKey)
+  }
 }
 
 // Shared by the title and body editors: both save with a captured

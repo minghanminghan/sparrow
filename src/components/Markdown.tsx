@@ -18,35 +18,37 @@ export function Markdown({ children }: { children: string }) {
   const openPanel = useKb((s) => s.openPanel)
 
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeSanitize, rehypeHighlight]}
-      components={{
-        a({ href, children: linkChildren, ...props }) {
-          if (href?.startsWith('#task:')) {
-            const id = href.slice('#task:'.length)
+    <div className="md">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeSanitize, rehypeHighlight]}
+        components={{
+          a({ href, children: linkChildren, ...props }) {
+            if (href?.startsWith('#task:')) {
+              const id = href.slice('#task:'.length)
+              return (
+                <a
+                  href={href}
+                  {...props}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    openPanel(id)
+                  }}
+                >
+                  {linkChildren}
+                </a>
+              )
+            }
             return (
-              <a
-                href={href}
-                {...props}
-                onClick={(e) => {
-                  e.preventDefault()
-                  openPanel(id)
-                }}
-              >
+              <a href={href} {...props}>
                 {linkChildren}
               </a>
             )
-          }
-          return (
-            <a href={href} {...props}>
-              {linkChildren}
-            </a>
-          )
-        },
-      }}
-    >
-      {rewriteMentions(children)}
-    </ReactMarkdown>
+          },
+        }}
+      >
+        {rewriteMentions(children)}
+      </ReactMarkdown>
+    </div>
   )
 }
