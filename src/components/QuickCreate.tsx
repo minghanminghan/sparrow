@@ -31,7 +31,7 @@ export function QuickCreate() {
   const columns = useKb((s) => s.index?.config.columns)
   const projects = useKb((s) => s.index?.projects)
   const byId = useKb((s) => s.byId)
-  const titleRef = useRef<HTMLInputElement>(null)
+  const titleRef = useRef<HTMLTextAreaElement>(null)
   const submitting = useRef(false)
   const [title, setTitle] = useState('')
   const [project, setProject] = useState('')
@@ -148,10 +148,12 @@ export function QuickCreate() {
   }
 
   const titleInput = (
-    <input
+    // A textarea so long titles wrap; Enter still submits instead of adding a newline.
+    <textarea
       ref={titleRef}
+      rows={1}
       value={title}
-      onChange={(e) => setTitle(e.target.value)}
+      onChange={(e) => setTitle(e.target.value.replace(/\n/g, ' '))}
       onKeyDown={(e) => {
         // ⌘Enter bubbles to the dialog's handler; submitting here too made two tasks.
         if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
@@ -160,7 +162,7 @@ export function QuickCreate() {
         }
       }}
       placeholder="Task title"
-      className="w-full border-b border-gray-300 pb-2 text-lg outline-none"
+      className="field-sizing-content w-full resize-none border-b border-gray-300 pb-2 text-lg wrap-break-word outline-none"
     />
   )
 
