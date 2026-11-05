@@ -348,7 +348,7 @@ export function TaskList() {
           />
         </DndContext>
       </div>
-      <div className="flex items-center gap-2 border-t border-gray-200 px-2 py-2">
+      <div className="flex items-center gap-2 border-t border-gray-200 px-2 py-2 md:hidden">
         <span className="w-16 shrink-0" />
         <input
           value={newTitle}
