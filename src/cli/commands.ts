@@ -59,6 +59,7 @@ export const COMMANDS: CommandDef[] = [
     summary: 'Update task fields',
     args: '<KEY>',
     flags: [
+      { name: 'project', type: 'string', desc: 'move to project (gives the task and its subtasks new keys; old keys still work)' },
       { name: 'title', type: 'string', desc: 'new title' },
       { name: 'title-hash', type: 'string', desc: 'expected titleHash, for conflict checking' },
       { name: 'body', type: 'string', desc: 'replace description, or "-" for stdin' },
@@ -254,11 +255,12 @@ async function neighborRank(status: string, selfId: string, before?: string, aft
 async function cmdUpdate(id: string, values: Values): Promise<CommandResult> {
   let task = await getTask(id)
   const apply = async (op: Op): Promise<void> => {
-    task = await postOp(id, op)
+    task = await postOp(task.id, op)
   }
   if ((values['ref-label'] !== undefined || values['ref-remove']) && values.ref === undefined) {
     throw new KbError('usage', '--ref-label and --ref-remove require --ref')
   }
+  if (values.project !== undefined) await apply({ type: 'setProject', project: values.project as string })
   if (values.title !== undefined) await apply({ type: 'setTitle', title: values.title as string, baseHash: values['title-hash'] as string | undefined })
   const body = readBodyInput(values)
   if (body !== undefined) await apply({ type: 'setBody', body, baseHash: values['body-hash'] as string | undefined })
@@ -267,7 +269,7 @@ async function cmdUpdate(id: string, values: Values): Promise<CommandResult> {
   if (values.parent !== undefined) await apply({ type: 'setParent', parent: values.parent as string })
   if (values['one-shot'] !== undefined) await apply({ type: 'setOneShot', oneShot: values['one-shot'] as boolean })
   if (values.before !== undefined || values.after !== undefined) {
-    const rank = await neighborRank(task.status, id, values.before as string | undefined, values.after as string | undefined)
+    const rank = await neighborRank(task.status, task.id, values.before as string | undefined, values.after as string | undefined)
     await apply({ type: 'setRank', rank })
   }
   if (values.ref !== undefined) {

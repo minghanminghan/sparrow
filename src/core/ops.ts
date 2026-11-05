@@ -5,7 +5,7 @@ import type { Db } from './db'
 import { KbError } from './errors'
 import { hash } from './format'
 import { INBOX, normalizeProjectKey, normalizeTaskKey, splitTaskKey } from './keys'
-import { loadTasks, rowIdOf, saveTask } from './store'
+import { loadAliases, loadTasks, rowIdOf, saveTask } from './store'
 import type { Config, Link, Ref, Task } from './types'
 
 export type Op =
@@ -14,6 +14,7 @@ export type Op =
   | { type: 'setDue'; due: string | null }
   | { type: 'setParent'; parent: string | null }
   | { type: 'setOneShot'; oneShot: boolean }
+  | { type: 'setProject'; project: string }
   | { type: 'setTitle'; title: string; baseHash?: string }
   | { type: 'setBody'; body: string; baseHash?: string }
   | { type: 'addLink'; link: Link }
@@ -45,7 +46,7 @@ export const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 
 export function readTask(db: Db, id: string): Task {
   const key = normalizeTaskKey(id)
-  const task = loadTasks(db, key)[0]
+  const task = loadTasks(db, key)[0] ?? loadTasks(db, loadAliases(db)[key] ?? key)[0]
   if (!task) throw new KbError('not_found', `task ${key} not found`)
   return task
 }
@@ -94,6 +95,26 @@ function checkParent(db: Db, task: Task, parent: string): void {
   }
 }
 
+// Keys are project-number, so moving renumbers the task and its subtasks. A moved subtask leaves its parent.
+function setProject(db: Db, task: Task, project: string): void {
+  if (project === task.project) return
+  const take = db.prepare('UPDATE projects SET next_number = next_number + 1 WHERE key = ? RETURNING next_number - 1 AS n')
+  const childrenOf = db.prepare('SELECT id FROM tasks WHERE parent = ?')
+  const alias = db.prepare('INSERT INTO task_aliases (project, number, task_id) SELECT project, number, id FROM tasks WHERE id = ?')
+  const renumber = db.prepare('UPDATE tasks SET project = ?, number = ? WHERE id = ?')
+  const ids = [rowIdOf(db, task.id)]
+  for (let i = 0; i < ids.length; i++) for (const r of childrenOf.all(ids[i]) as { id: number }[]) ids.push(r.id)
+  for (const id of ids) {
+    const next = take.get(project) as { n: number } | undefined
+    if (!next) throw new KbError('not_found', `project ${project} not found`)
+    alias.run(id)
+    renumber.run(project, next.n, id)
+    if (id === ids[0]) task.id = `${project}-${next.n}`
+  }
+  task.project = project
+  task.parent = undefined
+}
+
 const normalizeLink = (link: Link): Link => ({ type: link.type, id: normalizeTaskKey(link.id) })
 
 function apply(db: Db, config: Config, task: Task, op: Op, at: string): void {
@@ -107,7 +128,7 @@ function apply(db: Db, config: Config, task: Task, op: Op, at: string): void {
       task.due = op.due ?? undefined
       return
     case 'setParent': {
-      const parent = op.parent ? normalizeTaskKey(op.parent) : undefined
+      const parent = op.parent ? readTask(db, op.parent).id : undefined
       if (parent) checkParent(db, task, parent)
       task.parent = parent
       return
@@ -115,6 +136,8 @@ function apply(db: Db, config: Config, task: Task, op: Op, at: string): void {
     case 'setOneShot':
       task.oneShot = op.oneShot
       return
+    case 'setProject':
+      return setProject(db, task, normalizeProjectKey(op.project))
     case 'setTitle':
       checkHash('title', task.title, op.baseHash)
       task.title = op.title

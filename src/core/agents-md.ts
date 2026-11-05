@@ -16,6 +16,8 @@ Get the project from the task you are working on or from your instructions.
 - \`sparrow project create <KEY> --name "..."\` makes one (1-6 letters or
   digits, starting with a letter).
 - \`sparrow list --project <KEY>\` lists one project's tasks.
+- \`sparrow update <key> --project <KEY>\` moves a task and its subtasks. They
+  get new keys. The old keys still work.
 - Mention another task in a body or comment as \`[[KEY-N]]\`.
 
 ## Rule: change tasks through \`sparrow\`

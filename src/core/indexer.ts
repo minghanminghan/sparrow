@@ -4,7 +4,7 @@ import type { Db } from './db'
 import { hash } from './format'
 import { MENTION_RE } from './keys'
 import { loadProjects } from './projects'
-import { loadTasks } from './store'
+import { loadAliases, loadTasks } from './store'
 import type { Attachment, Config, Project, Task } from './types'
 
 export type Backlink = { type: 'blocked-by' | 'relates' | 'mentioned-in'; id: string; done?: true }
@@ -17,7 +17,8 @@ export type TaskView = Task & {
   progress: { done: number; total: number }
   attachments: Attachment[]
 }
-export type Index = { config: Config; projects: Project[]; tasks: TaskView[] }
+// `moved` maps keys from before a project move to current keys.
+export type Index = { config: Config; projects: Project[]; tasks: TaskView[]; moved: Record<string, string> }
 
 const REVERSE_LINK: Record<Task['links'][number]['type'], Backlink['type']> = {
   blocks: 'blocked-by',
@@ -35,6 +36,7 @@ export function buildIndex(db: Db): Index {
   const config = loadConfig(db)
   const tasksById = new Map<string, Task>(loadTasks(db).map((t) => [t.id, t]))
   const attachments = loadAttachments(db)
+  const moved = loadAliases(db)
 
   const backlinks = new Map<string, Backlink[]>()
   const addBacklink = (id: string, bl: Backlink) => {
@@ -51,7 +53,7 @@ export function buildIndex(db: Db): Index {
       if (bl.type === 'blocked-by' && done) bl.done = true
       addBacklink(link.id, bl)
     }
-    for (const mentioned of mentionsIn(task)) addBacklink(mentioned, { type: 'mentioned-in', id: task.id })
+    for (const mentioned of mentionsIn(task)) addBacklink(moved[mentioned] ?? mentioned, { type: 'mentioned-in', id: task.id })
     if (task.parent) {
       if (!children.has(task.parent)) children.set(task.parent, [])
       children.get(task.parent)!.push(task.id)
@@ -76,11 +78,12 @@ export function buildIndex(db: Db): Index {
 
   views.sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
 
-  return { config, projects: loadProjects(db), tasks: views }
+  return { config, projects: loadProjects(db), tasks: views, moved }
 }
 
 export function viewTask(index: Index, id: string): TaskView | undefined {
-  return index.tasks.find((t) => t.id === id)
+  const key = index.moved[id] ?? id
+  return index.tasks.find((t) => t.id === key)
 }
 
 export function nextTask(index: Index): TaskView | null {

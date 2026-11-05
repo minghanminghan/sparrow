@@ -109,6 +109,13 @@ export const MIGRATIONS: (string | ((db: Db) => void))[] = [
     db.prepare("UPDATE tasks SET status = ? WHERE status = 'review'").run(active)
   },
   `INSERT OR IGNORE INTO projects (key, name, color, next_number) VALUES ('TASK', 'No project', '#475569', 1);`,
+  // Keys a task had before it moved to another project, so old links keep working.
+  `CREATE TABLE task_aliases (
+    project TEXT NOT NULL,
+    number INTEGER NOT NULL,
+    task_id INTEGER NOT NULL REFERENCES tasks(id),
+    PRIMARY KEY (project, number)
+  );`,
 ]
 
 export function dbPath(): string {
