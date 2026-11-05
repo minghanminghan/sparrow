@@ -20,20 +20,45 @@ function CardContent({ task }: { task: TaskView }) {
   const parentTitle = useKb((s) => (task.parent ? s.byId[task.parent]?.title : undefined))
   const due = dueState(task.due)
   const color = useProject(task.project)?.color
+  const focused = useKb((s) => s.panelId === task.id)
+  const projects = useKb((s) => s.index?.projects)
+  const op = useKb((s) => s.op)
 
   return (
     <>
       <div className="font-mono text-xs text-gray-400">
-        {/* Stops the click and the pointerdown so the key opens the project, not the panel or a drag. */}
-        <NextLink
-          href={`/p/${task.project}`}
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-          className="inline-flex items-center gap-1 hover:underline"
-        >
-          <ProjectSquare color={color} />
-          {task.id}
-        </NextLink>
+        {focused ? (
+          // An invisible select over the key, so a click opens the native project dropdown.
+          <span className="relative inline-flex items-center gap-1 hover:underline">
+            <ProjectSquare color={color} />
+            {task.id}
+            <select
+              value={task.project}
+              title="Move to project"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              onChange={(e) => void op(task.id, { type: 'setProject', project: e.target.value })}
+              className="absolute inset-0 cursor-pointer opacity-0"
+            >
+              {projects?.map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </span>
+        ) : (
+          // Stops the click and the pointerdown so the key opens the project, not the panel or a drag.
+          <NextLink
+            href={`/p/${task.project}`}
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 hover:underline"
+          >
+            <ProjectSquare color={color} />
+            {task.id}
+          </NextLink>
+        )}
         {task.oneShot && (
           <span title="One-shot" className="absolute right-2 top-1.5 text-lg leading-none">
             🤖
