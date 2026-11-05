@@ -23,7 +23,7 @@ function CardContent({ task }: { task: TaskView }) {
 
   return (
     <>
-      <div className="flex items-center justify-between font-mono text-xs text-gray-400">
+      <div className="font-mono text-xs text-gray-400">
         {/* Stops the click and the pointerdown so the key opens the project, not the panel or a drag. */}
         <NextLink
           href={`/p/${task.project}`}
@@ -35,7 +35,7 @@ function CardContent({ task }: { task: TaskView }) {
           {task.id}
         </NextLink>
         {task.oneShot && (
-          <span title="One-shot" className="text-lg leading-none">
+          <span title="One-shot" className="absolute right-2 top-1.5 text-lg leading-none">
             🤖
           </span>
         )}
@@ -80,7 +80,7 @@ function SortableCard({ taskId, dragOverlay }: { taskId: string; dragOverlay: bo
       {...(dragOverlay ? {} : listeners)}
       onClick={() => openPanel(task.id)}
       data-opens-task
-      className={`rounded-md border border-gray-200 bg-white p-2 text-sm shadow-sm ${
+      className={`relative rounded-md border border-gray-200 bg-white p-2 text-sm shadow-sm ${
         dragOverlay ? 'rotate-2 shadow-lg' : 'cursor-grab hover:border-gray-300'
       }`}
     >
@@ -99,7 +99,7 @@ function StaticCard({ taskId }: { taskId: string }) {
     <div
       onClick={() => openPanel(task.id)}
       data-opens-task
-      className="cursor-pointer rounded-md border border-gray-200 bg-white p-2 text-sm shadow-sm"
+      className="relative cursor-pointer rounded-md border border-gray-200 bg-white p-2 text-sm shadow-sm"
     >
       <CardContent task={task} />
     </div>
