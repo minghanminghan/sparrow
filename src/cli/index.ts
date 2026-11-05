@@ -48,6 +48,7 @@ function printDetail(t: TaskView): void {
     ['Refs', t.refs.map((r) => (r.label ? `${r.label} <${r.url}>` : r.url)).join(', ') || undefined],
     ['Created', t.created],
     ['Updated', t.updated],
+    ['Started', t.started],
     ['Completed', t.completed],
   ]
   printTable(fields.filter(([, v]) => v !== undefined).map(([k, v]) => [`${k}:`, v!]))

@@ -26,3 +26,7 @@ export function columnByRole(c: Config, role: Role): Column {
 export function isDone(c: Config, status: string): boolean {
   return c.columns.some((col) => col.key === status && col.role === 'done')
 }
+
+export function isActive(c: Config, status: string): boolean {
+  return c.columns.some((col) => col.key === status && col.role === 'active')
+}

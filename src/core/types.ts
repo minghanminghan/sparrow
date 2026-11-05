@@ -15,6 +15,7 @@ export type Task = {
   rank: string
   parent?: string
   due?: string
+  started?: string
   completed?: string
   oneShot: boolean
   links: Link[]
