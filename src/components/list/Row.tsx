@@ -84,6 +84,11 @@ function RowImpl({ id, depth, dimmed, selected, hasChildren, collapsed, onToggle
       >
         {task.title}
       </button>
+      {task.oneShot && (
+        <span title="One-shot" className="shrink-0 text-lg leading-none">
+          🤖
+        </span>
+      )}
       <select
         value={task.status}
         onClick={(e) => e.stopPropagation()}
