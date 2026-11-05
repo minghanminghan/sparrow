@@ -287,9 +287,25 @@ while [[ -z $RUN ]]; do
 done
 say "run https://github.com/$REPO/actions/runs/$RUN"
 HINT="if main is broken, fix it in a new PR. Full log: https://github.com/$REPO/actions/runs/$RUN"
-wait_job release
-run git fetch -q --tags origin
-VER=$(git tag --contains "$SHA" --list 'v*' --sort=v:refname | head -n1)
+# semantic-release skips a run when main moved past it; a newer run then releases this commit.
+start=$SECONDS
+while :; do
+  wait_job release
+  run git fetch -q --tags origin main
+  VER=$(git tag --contains "$SHA" --list 'v*' --sort=v:refname | head -n1)
+  [[ -n $VER ]] && break
+  [[ $(git rev-parse origin/main) == "$SHA" ]] && break
+  run gh run list -R "$REPO" --workflow release.yml --branch main --limit 1 --json databaseId --jq '.[0].databaseId'
+  if [[ $OUT != "$RUN" ]]; then
+    say "run $RUN made no release and main moved on, following newer run $OUT"
+    RUN=$OUT
+    start=$SECONDS
+  elif ((SECONDS - start > 60)); then
+    break
+  else
+    sleep 5
+  fi
+done
 VER=${VER#v}
 if [[ -z $VER ]]; then
   say "no release (this commit type does not release)"
@@ -360,7 +376,7 @@ run git fetch -q origin main
 if git switch -q main 2>/dev/null; then run git pull -q --ff-only; else run git switch -q --detach origin/main; fi
 run git branch -D "$BRANCH"
 if [[ -n $(git ls-remote --heads origin "$BRANCH") ]]; then run git push -q origin --delete "$BRANCH"; fi
-say "on main at $(git log --oneline -1)"
+say "on $(git branch --show-current | grep . || echo 'detached origin/main') at $(git log --oneline -1)"
 
 echo
 echo "SHIPPED #$PR${VER:+ as v$VER}${TASK:+ ($TASK done)}"
