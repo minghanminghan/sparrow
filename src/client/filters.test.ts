@@ -32,7 +32,7 @@ const view = (p: Partial<TaskView>): TaskView => ({
 
 test('project filter keeps only picked projects', () => {
   const tasks = [view({ id: 'SPAR-1', project: 'SPAR' }), view({ id: 'NEWS-1', project: 'NEWS' }), view({ id: 'V2-1', project: 'V2' })]
-  const base = { q: '', hideSubtasks: false, showDone: true, projects: [] }
+  const base = { q: '', showDone: true, projects: [] }
   expect(applyFilters(tasks, base, config).map((t) => t.id)).toHaveLength(3)
   expect(applyFilters(tasks, { ...base, projects: ['NEWS', 'V2'] }, config).map((t) => t.id)).toEqual(['NEWS-1', 'V2-1'])
 })

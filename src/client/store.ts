@@ -19,7 +19,6 @@ import { VERSION } from '@/core/version'
 
 export type Filters = {
   q: string
-  hideSubtasks: boolean
   due?: 'overdue' | 'week'
   showDone: boolean
   // Project keys in the order they were picked; empty shows every project.
@@ -140,7 +139,7 @@ export const useKb = create<KbStore>()((set, get) => {
     offline: false,
     savedAt: null,
     rev: null,
-    filters: { q: '', hideSubtasks: false, showDone: false, projects: [] },
+    filters: { q: '', showDone: false, projects: [] },
     panelId: null,
     createFor: null,
     toasts: [],
@@ -449,8 +448,6 @@ export function applyFilters(tasks: TaskView[], f: Filters, config: Config): Tas
 
   const q = f.q.trim().toLowerCase()
   if (q) result = result.filter((t) => t.id.toLowerCase().includes(q) || t.title.toLowerCase().includes(q))
-
-  if (f.hideSubtasks) result = result.filter((t) => !t.parent)
 
   if (f.projects.length) result = result.filter((t) => f.projects.includes(t.project))
 
