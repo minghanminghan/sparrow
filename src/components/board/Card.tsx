@@ -74,8 +74,9 @@ function CardContent({ task }: { task: TaskView }) {
             {task.progress.done}/{task.progress.total}
           </span>
         )}
-        {task.links.length > 0 && <span>🔗 {task.links.length}</span>}
-        {task.refs.length > 0 && <span>📎 {task.refs.length}</span>}      </div>
+        {task.refs.length > 0 && <span>📎 {task.refs.length}</span>}
+        {task.links.length > 0 && <span className="ml-auto">🔗 {task.links.length}</span>}
+      </div>
     </>
   )
 }
