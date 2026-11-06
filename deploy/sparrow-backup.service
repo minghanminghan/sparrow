@@ -1,4 +1,4 @@
-# Template: deploy/setup.sh fills in @NODE_BIN@ and installs it to /etc/systemd/system.
+# Template: hawk setup fills in @NODE_BIN@ and installs it to /etc/systemd/system.
 # Started nightly by sparrow-backup.timer. Run now: sudo systemctl start sparrow-backup
 [Unit]
 Description=sparrow nightly DB backup and cleanup

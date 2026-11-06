@@ -222,8 +222,8 @@ if [[ -z $SHA ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Waits for job $1 of the release run to finish. Retries a semantic-release notes push
-# rejection once. Fails with the log of any failed job.
+# Waits for job $1 ("hawk / release" or "hawk / deploy") of the release run to finish. Retries a
+# semantic-release notes push rejection once. Fails with the log of any failed job.
 RERAN=false
 wait_job() {
   local start=$SECONDS queued_at= json failed state
@@ -256,13 +256,13 @@ wait_job() {
     [[ $state == completed ]] && return
     # A job that never started is skipped once the run is done.
     [[ -z $state && $(jaq -r .status <<<"$json") == completed ]] && return
-    if [[ $1 == deploy && $state == queued ]]; then
+    if [[ $1 == "hawk / deploy" && $state == queued ]]; then
       queued_at=${queued_at:-$SECONDS}
       if ((SECONDS - queued_at > 120)); then
-        run gh api "repos/$REPO/actions/runners" --jq '.runners[] | select(any(.labels[]; .name == "sparrow")) | .status'
+        run gh api "repos/$REPO/actions/runners" --jq '.runners[] | select(any(.labels[]; .name == "hawk")) | .status'
         if [[ $OUT != *online* ]]; then
           HINT="the mini PC runner is down. Check it: ssh $SERVER 'systemctl status \"actions.runner.*\"'"
-          fail 1 "gh api repos/$REPO/actions/runners" "deploy is queued and the sparrow runner is ${OUT:-missing}"
+          fail 1 "gh api repos/$REPO/actions/runners" "deploy is queued and the hawk runner is ${OUT:-missing}"
         fi
       fi
     fi
@@ -290,7 +290,7 @@ HINT="if main is broken, fix it in a new PR. Full log: https://github.com/$REPO/
 # semantic-release skips a run when main moved past it; a newer run then releases this commit.
 start=$SECONDS
 while :; do
-  wait_job release
+  wait_job "hawk / release"
   run git fetch -q --tags origin main
   VER=$(git tag --contains "$SHA" --list 'v*' --sort=v:refname | head -n1)
   [[ -n $VER ]] && break
@@ -319,7 +319,7 @@ if [[ -z $VER ]]; then
   say "skipped (no release)"
 else
   HINT="see the server log: ssh $SERVER journalctl -u sparrow -n 50. After a fix on the server: gh run rerun $RUN -R $REPO --failed, then rerun"
-  wait_job deploy
+  wait_job "hawk / deploy"
   start=$SECONDS
   while :; do
     got=$(curl -fsS "$PROD/api/version" 2>&1 | jaq -r .version 2>/dev/null)
