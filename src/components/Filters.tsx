@@ -18,14 +18,6 @@ export function Filters() {
 
   return (
     <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-      <label className="flex items-center gap-1">
-        <input
-          type="checkbox"
-          checked={filters.hideSubtasks}
-          onChange={(e) => setFilters({ hideSubtasks: e.target.checked })}
-        />
-        Hide subtasks
-      </label>
       <select
         value={filters.due ?? ''}
         onChange={(e) => setFilters({ due: (e.target.value || undefined) as FiltersType['due'] })}
