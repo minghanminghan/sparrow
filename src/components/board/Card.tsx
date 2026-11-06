@@ -23,6 +23,7 @@ function CardContent({ task }: { task: TaskView }) {
   const focused = useKb((s) => s.panelId === task.id)
   const projects = useKb((s) => s.index?.projects)
   const op = useKb((s) => s.op)
+  const hasMeta = !!task.due || task.progress.total > 0 || task.refs.length > 0
 
   return (
     <>
@@ -75,7 +76,10 @@ function CardContent({ task }: { task: TaskView }) {
           </span>
         )}
         {task.refs.length > 0 && <span>📎 {task.refs.length}</span>}
-        {task.links.length > 0 && <span className="ml-auto">🔗 {task.links.length}</span>}
+        {task.links.length > 0 && (
+          // Without other meta the row is empty, so the icon floats in the bottom gap to keep the card height.
+          <span className={hasMeta ? 'ml-auto' : 'absolute bottom-1 right-2 leading-none'}>🔗 {task.links.length}</span>
+        )}
       </div>
     </>
   )
