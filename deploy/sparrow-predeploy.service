@@ -1,5 +1,5 @@
-# Template: deploy/setup.sh fills in @NODE_BIN@ and installs it to /etc/systemd/system.
-# Started by deploy/deploy.sh: backs up the DB, then migrates it with the new build at /opt/sparrow/next.
+# Template: hawk setup fills in @NODE_BIN@ and installs it to /etc/systemd/system.
+# Started by hawk deploy: backs up the DB, then migrates it with the new build at /opt/sparrow/next.
 [Unit]
 Description=sparrow pre-deploy DB backup and migration
 
