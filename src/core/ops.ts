@@ -40,7 +40,7 @@ export type CreateInput = {
 
 // What a one-shot task asks of the agent that picks it up.
 export const ONE_SHOT_NOTE =
-  'you are responsible for creating code, merging the PR, monitoring the deployment, syncing local CLIs, and updating the task'
+  'you are responsible for creating code, merging the PR, monitoring the deployment, syncing local CLIs, and updating the task status'
 
 export const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 
