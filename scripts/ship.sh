@@ -82,7 +82,7 @@ if [[ -n $dirty ]]; then
   fail 1 "git status --porcelain" "$dirty"
 fi
 HINT="sign in with: gh auth login"
-run gh auth status
+run gh auth status -h github.com
 if [[ -n $TASK ]]; then
   HINT="check the task key, or run without --task"
   run sparrow show "$TASK" --json
