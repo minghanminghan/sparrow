@@ -1,4 +1,5 @@
 import { constants, createGzip } from 'node:zlib'
+import { onShutdown } from '@/server/shutdown'
 import { errorResponse, getState } from '@/server/state'
 import type { ServerEvent } from '@/server/state'
 
@@ -24,6 +25,7 @@ export async function GET(req: Request): Promise<Response> {
         const cleanup = (): void => {
           if (closed) return
           closed = true
+          offShutdown()
           clearInterval(ping)
           state.emitter.off('event', onEvent)
           gzip?.destroy()
@@ -59,6 +61,7 @@ export async function GET(req: Request): Promise<Response> {
         const ping = setInterval(() => send(': ping\n\n'), PING_MS)
 
         req.signal.addEventListener('abort', cleanup)
+        const offShutdown = onShutdown(cleanup)
 
         const first: ServerEvent =
           clientRev === state.rev
